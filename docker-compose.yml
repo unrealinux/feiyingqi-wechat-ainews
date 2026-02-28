@@ -1,0 +1,38 @@
+version: '3.8'
+
+services:
+  ainews:
+    build: .
+    container_name: ainews-publisher
+    restart: unless-stopped
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./output:/app/output
+      - ./cache:/app/cache
+      - ./config.yaml:/app/config.yaml
+    environment:
+      - PYTHONUNBUFFERED=1
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - EXA_API_KEY=${EXA_API_KEY}
+      - WECHAT_APP_ID=${WECHAT_APP_ID}
+      - WECHAT_APP_SECRET=${WECHAT_APP_SECRET}
+    command: python main.py dashboard
+
+  scheduler:
+    build: .
+    container_name: ainews-scheduler
+    restart: unless-stopped
+    volumes:
+      - ./output:/app/output
+      - ./cache:/app/cache
+      - ./config.yaml:/app/config.yaml
+    environment:
+      - PYTHONUNBUFFERED=1
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - EXA_API_KEY=${EXA_API_KEY}
+      - WECHAT_APP_ID=${WECHAT_APP_ID}
+      - WECHAT_APP_SECRET=${WECHAT_APP_SECRET}
+    command: python main.py schedule
+    deploy:
+      replicas: 0

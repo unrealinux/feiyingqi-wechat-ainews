@@ -1,0 +1,85 @@
+# ===========================================
+# 🇨🇳 AI News Publisher - 国内环境配置指南
+# ===========================================
+
+# 一、LLM 配置 (国内推荐免费方案)
+# -------------------------------------------
+
+# 方案1: DeepSeek (推荐 - 免费额度多)
+# 申请地址: https://platform.deepseek.com/
+deepseek:
+  api_key: ""  # 填入你的 DeepSeek API Key
+  model: "deepseek-chat"
+
+# 方案2: 智谱AI (免费额度)
+# 申请地址: https://open.bigmodel.cn/
+zhipu:
+  api_key: ""  # 填入你的智谱AI API Key
+  model: "glm-4"
+
+# 方案3: SiliconFlow (便宜)
+# 申请地址: https://siliconflow.cn
+siliconflow:
+  api_key: ""
+  model: "Qwen/Qwen2-7B-Instruct"
+
+# 方案4: OpenAI (需要代理)
+# openai:
+#   api_key: "sk-..."
+
+# 二、微信公众号配置
+# -------------------------------------------
+wechat:
+  app_id: "your_app_id_here"
+  app_secret: "your_app_secret_here"
+
+# 三、新闻源配置 (国内可用)
+# -------------------------------------------
+news:
+  search_keywords:
+    - "AI 人工智能"
+    - "大语言模型 LLM"
+    - "GPT OpenAI"
+    - "大模型 国产"
+    - "AI 科技"
+  
+  max_news: 15
+  exclude_keywords:
+    - "广告"
+    - "招聘"
+  
+  # 🇨🇳 启用国内新闻源
+  domestic_sources:
+    enabled: true
+    zhihu: true    # 知乎热榜
+    weibo: true    # 微博热搜
+    sites: true    # 科技媒体
+
+# 四、发布配置
+# -------------------------------------------
+publish:
+  author: "AI前沿观察"
+  default_cover: "cover.png"
+  default_digest: "每日AI资讯汇总"
+
+# 五、定时任务
+# -------------------------------------------
+scheduler:
+  enabled: false
+  time: "08:00"
+
+
+# ===========================================
+# 🚀 快速开始
+# ===========================================
+
+# 1. 申请免费 API Key:
+#    - DeepSeek: https://platform.deepseek.com/
+#    - 智谱AI: https://open.bigmodel.cn/
+#    - SiliconFlow: https://siliconflow.cn
+
+# 2. 编辑 config.yaml:
+#    填入上面申请的 API Key
+
+# 3. 运行:
+#    python main.py run
