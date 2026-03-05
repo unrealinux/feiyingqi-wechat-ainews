@@ -31,3 +31,7 @@ watchdog>=3.0.0
 
 # Async support (optional)
 # aiohttp>=3.9.0  # Uncomment if async features needed
+
+# Image processing
+Pillow>=10.0.0
+httpx>=0.25.0
