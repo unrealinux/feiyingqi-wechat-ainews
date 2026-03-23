@@ -2,6 +2,7 @@
 AI News Fetcher - 高性能新闻获取模块
 
 支持多源并发获取、智能重试、缓存机制
+参考 feiqingqiWechatMP 优化，集成代理支持和错误处理
 """
 
 import os
@@ -15,6 +16,10 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 import time
 
 from src.config import load_config, get_news_config
+from src.proxy import get_requests_proxy, is_proxy_enabled
+from src.errors import with_retry, create_app_error, AppError, ErrorType
+from src.health import inc_fetched, inc_fetch_failure
+from src.mock_data import is_mock_mode_enabled, generate_mock_news, MockNewsItem
 
 
 logging.basicConfig(
@@ -87,6 +92,23 @@ class NewsFetcher:
         self.max_retries = 2
         self.cache_dir = Path("cache")
         self.cache_dir.mkdir(exist_ok=True)
+        
+        # 代理配置
+        self.proxies = get_requests_proxy()
+        self.use_proxy = is_proxy_enabled()
+        
+        # 模拟数据模式
+        self.use_mock = is_mock_mode_enabled()
+        if self.use_mock:
+            logger.info("模拟数据模式已启用")
+        
+        # 健康监控
+        self._health_checker = None
+        try:
+            import src.health as health_module
+            self._health_checker = health_module.get_health_checker()
+        except (ImportError, AttributeError):
+            pass
     
     def fetch_all(self) -> List[NewsItem]:
         """获取所有新闻源"""
@@ -94,6 +116,33 @@ class NewsFetcher:
         max_news = self.news_config.get("max_news", 15)
         exclude_keywords = self.news_config.get("exclude_keywords", [])
         sources = self.news_config.get("sources", {})
+        
+        # 检查模拟数据模式
+        if self.use_mock:
+            logger.info("使用模拟数据模式...")
+            mock_items = generate_mock_news(count=max_news)
+            # 转换为 NewsItem 格式
+            all_news = [
+                NewsItem(
+                    title=item.title,
+                    url=item.url,
+                    source=item.source,
+                    description=item.description,
+                    published_at=item.published_at
+                )
+                for item in mock_items
+            ]
+            
+            # 更新健康监控
+            if self._health_checker:
+                self._health_checker.inc_fetched(len(all_news))
+            
+            elapsed = time.time() - start_time
+            logger.info("="*50)
+            logger.info(f"模拟数据完成：{len(all_news)} 条新闻 | 耗时：{elapsed:.1f}s")
+            logger.info("="*50)
+            
+            return all_news
         
         all_news: List[NewsItem] = []
         tasks = []
@@ -146,8 +195,16 @@ class NewsFetcher:
                             if item.title and self._should_include(item, exclude_keywords):
                                 all_news.append(item)
                         logger.info(f"  ✓ {task_type}: +{len(results)} 条")
+                        
+                        # 更新健康监控
+                        if self._health_checker:
+                            self._health_checker.inc_fetched(len(results))
                 except Exception as e:
                     logger.debug(f"  ✗ {task_type}: {str(e)[:50]}")
+                    
+                    # 更新健康监控
+                    if self._health_checker:
+                        self._health_checker.inc_fetch_failure(1)
         
         all_news = self._deduplicate(all_news)
         all_news = self._filter_by_date(all_news, days=7)

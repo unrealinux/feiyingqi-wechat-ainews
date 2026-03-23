@@ -1,5 +1,8 @@
 """
 Health Check Module - 健康检查与系统监控
+
+参考 feiqingqiWechatMP 的 health.js 实现
+提供系统健康指标与业务指标跟踪
 """
 import os
 import sys
@@ -10,6 +13,7 @@ from datetime import datetime
 from typing import Dict, Any, Optional, Callable
 from dataclasses import dataclass, field
 from enum import Enum
+from threading import Lock
 
 from src.logger import get_logger
 
@@ -35,12 +39,36 @@ class HealthCheckResult:
     duration_ms: float = 0.0
 
 
+@dataclass
+class BusinessCounters:
+    """业务计数器"""
+    fetched: int = 0              # 获取的新闻数量
+    fetch_failures: int = 0       # 获取失败次数
+    aggregated: int = 0           # 聚合的新闻数量
+    generated: int = 0            # 生成的文章数量
+    published: int = 0            # 发布的文章数量
+    publish_failures: int = 0     # 发布失败次数
+
+
+@dataclass
+class BusinessTimestamps:
+    """业务时间戳"""
+    fetch: Optional[float] = None
+    aggregate: Optional[float] = None
+    generate: Optional[float] = None
+    publish: Optional[float] = None
+
+
 class HealthChecker:
     """健康检查器"""
     
     def __init__(self):
         self._checks: Dict[str, Callable] = {}
         self._last_results: Dict[str, HealthCheckResult] = {}
+        self._started_at = time.time()
+        self._business_counters = BusinessCounters()
+        self._business_timestamps = BusinessTimestamps()
+        self._lock = Lock()
         self._register_default_checks()
     
     def _register_default_checks(self):
@@ -228,6 +256,7 @@ class HealthChecker:
         return {
             "status": overall.value,
             "timestamp": datetime.now().isoformat(),
+            "uptime_seconds": time.time() - self._started_at,
             "checks": {
                 name: {
                     "status": result.status.value,
@@ -236,8 +265,146 @@ class HealthChecker:
                     "details": result.details
                 }
                 for name, result in results.items()
-            }
+            },
+            "business_metrics": self.get_business_metrics()
         }
+    
+    def inc_fetched(self, n: int = 1):
+        """增加获取计数"""
+        with self._lock:
+            self._business_counters.fetched += n
+            self._business_timestamps.fetch = time.time()
+    
+    def inc_fetch_failure(self, n: int = 1):
+        """增加获取失败计数"""
+        with self._lock:
+            self._business_counters.fetch_failures += n
+            self._business_timestamps.fetch = time.time()
+    
+    def inc_aggregated(self, n: int = 1):
+        """增加聚合计数"""
+        with self._lock:
+            self._business_counters.aggregated += n
+            self._business_timestamps.aggregate = time.time()
+    
+    def inc_generated(self, n: int = 1):
+        """增加生成计数"""
+        with self._lock:
+            self._business_counters.generated += n
+            self._business_timestamps.generate = time.time()
+    
+    def inc_published(self, n: int = 1):
+        """增加发布计数"""
+        with self._lock:
+            self._business_counters.published += n
+            self._business_timestamps.publish = time.time()
+    
+    def inc_publish_failure(self, n: int = 1):
+        """增加发布失败计数"""
+        with self._lock:
+            self._business_counters.publish_failures += n
+            self._business_timestamps.publish = time.time()
+    
+    def get_business_metrics(self) -> Dict[str, Any]:
+        """获取业务指标"""
+        with self._lock:
+            counters = self._business_counters
+            timestamps = self._business_timestamps
+            
+            # 计算失败率
+            total_fetch = counters.fetched + counters.fetch_failures
+            fetch_failure_rate = counters.fetch_failures / total_fetch if total_fetch > 0 else 0
+            
+            total_publish = counters.published + counters.publish_failures
+            publish_failure_rate = counters.publish_failures / total_publish if total_publish > 0 else 0
+            
+            # 格式化时间戳
+            def format_timestamp(ts: Optional[float]) -> Optional[str]:
+                if ts is None:
+                    return None
+                return datetime.fromtimestamp(ts).isoformat()
+            
+            return {
+                "counters": {
+                    "fetched": counters.fetched,
+                    "fetch_failures": counters.fetch_failures,
+                    "aggregated": counters.aggregated,
+                    "generated": counters.generated,
+                    "published": counters.published,
+                    "publish_failures": counters.publish_failures
+                },
+                "failure_rates": {
+                    "fetch": round(fetch_failure_rate, 4),
+                    "publish": round(publish_failure_rate, 4)
+                },
+                "last_activity": {
+                    "fetch": format_timestamp(timestamps.fetch),
+                    "aggregate": format_timestamp(timestamps.aggregate),
+                    "generate": format_timestamp(timestamps.generate),
+                    "publish": format_timestamp(timestamps.publish)
+                }
+            }
+    
+    def is_business_healthy(self) -> bool:
+        """检查业务是否健康"""
+        with self._lock:
+            counters = self._business_counters
+            
+            # 检查获取失败率
+            total_fetch = counters.fetched + counters.fetch_failures
+            if total_fetch > 10:  # 至少有一定量的数据才有意义
+                fetch_failure_rate = counters.fetch_failures / total_fetch
+                if fetch_failure_rate > 0.5:  # 失败率超过 50%
+                    return False
+            
+            # 检查发布失败率
+            total_publish = counters.published + counters.publish_failures
+            if total_publish > 0:
+                publish_failure_rate = counters.publish_failures / total_publish
+                if publish_failure_rate > 0.5:  # 失败率超过 50%
+                    return False
+            
+            return True
+    
+    def reset_business_metrics(self):
+        """重置业务指标"""
+        with self._lock:
+            self._business_counters = BusinessCounters()
+            self._business_timestamps = BusinessTimestamps()
+    
+    def print_business_report(self):
+        """打印业务报告"""
+        metrics = self.get_business_metrics()
+        
+        print("\n" + "="*50)
+        print("📊 业务指标报告")
+        print("="*50)
+        
+        print(f"业务健康: {'✅ 健康' if self.is_business_healthy() else '❌ 异常'}")
+        
+        print("\n📈 计数器:")
+        counters = metrics['counters']
+        print(f"  获取新闻: {counters['fetched']} 次")
+        print(f"  获取失败: {counters['fetch_failures']} 次")
+        print(f"  聚合新闻: {counters['aggregated']} 次")
+        print(f"  生成文章: {counters['generated']} 次")
+        print(f"  发布文章: {counters['published']} 次")
+        print(f"  发布失败: {counters['publish_failures']} 次")
+        
+        print("\n📉 失败率:")
+        failure_rates = metrics['failure_rates']
+        print(f"  获取失败率: {failure_rates['fetch']*100:.1f}%")
+        print(f"  发布失败率: {failure_rates['publish']*100:.1f}%")
+        
+        print("\n⏰ 最后活动时间:")
+        last_activity = metrics['last_activity']
+        for key, value in last_activity.items():
+            if value:
+                print(f"  {key}: {value}")
+            else:
+                print(f"  {key}: 无记录")
+        
+        print()
 
 
 # 全局健康检查器实例
@@ -260,3 +427,65 @@ def register_health_check(name: str, check_func: Callable[[], HealthCheckResult]
 def check_health() -> Dict[str, Any]:
     """快速健康检查"""
     return get_health_checker().get_status_report()
+
+
+# 业务指标便捷函数
+def inc_fetched(n: int = 1):
+    """增加获取计数"""
+    get_health_checker().inc_fetched(n)
+
+
+def inc_fetch_failure(n: int = 1):
+    """增加获取失败计数"""
+    get_health_checker().inc_fetch_failure(n)
+
+
+def inc_aggregated(n: int = 1):
+    """增加聚合计数"""
+    get_health_checker().inc_aggregated(n)
+
+
+def inc_generated(n: int = 1):
+    """增加生成计数"""
+    get_health_checker().inc_generated(n)
+
+
+def inc_published(n: int = 1):
+    """增加发布计数"""
+    get_health_checker().inc_published(n)
+
+
+def inc_publish_failure(n: int = 1):
+    """增加发布失败计数"""
+    get_health_checker().inc_publish_failure(n)
+
+
+def get_business_metrics() -> Dict[str, Any]:
+    """获取业务指标"""
+    return get_health_checker().get_business_metrics()
+
+
+def is_business_healthy() -> bool:
+    """检查业务是否健康"""
+    return get_health_checker().is_business_healthy()
+
+
+def print_business_report():
+    """打印业务报告"""
+    get_health_checker().print_business_report()
+
+
+def create_health_endpoint():
+    """创建健康检查端点（用于 Web 框架集成）"""
+    def health_check():
+        report = check_health()
+        business_healthy = is_business_healthy()
+        system_healthy = get_health_checker().get_overall_status() == HealthStatus.HEALTHY
+        
+        return {
+            "status": "ok" if (business_healthy and system_healthy) else "error",
+            "timestamp": datetime.now().isoformat(),
+            "data": report
+        }
+    
+    return health_check

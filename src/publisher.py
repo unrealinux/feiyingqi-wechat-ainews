@@ -2,6 +2,7 @@
 WeChat Publisher - 微信公众号发布模块
 
 支持 Markdown 转 HTML、草稿创建、自动发布
+参考 feiqingqiWechatMP 优化，集成代理支持和配置验证
 """
 
 import os
@@ -15,6 +16,10 @@ from pathlib import Path
 from typing import Optional, List
 
 from src.config import load_config, get_wechat_config, get_publish_config
+from src.proxy import get_requests_proxy, is_proxy_enabled
+from src.validate_config import validate_config, ValidationErrorType
+from src.errors import with_retry, AppError, ErrorType
+from src.health import inc_published, inc_publish_failure
 
 logging.basicConfig(
     level=logging.INFO,
@@ -41,11 +46,37 @@ class WeChatPublisher:
         self.access_token = None
         self.token_expires_at = 0
         
-        if not self.app_id or self.app_id == "your_app_id_here":
-            logger.warning("WeChat AppID not configured")
+        # 代理配置
+        self.proxies = get_requests_proxy()
+        self.use_proxy = is_proxy_enabled()
+        
+        # 配置验证
+        self._validate_config()
+        
+        # 健康监控
+        self._health_checker = None
+        try:
+            import src.health as health_module
+            self._health_checker = health_module.get_health_checker()
+        except (ImportError, AttributeError):
+            pass
+    
+    def _validate_config(self):
+        """验证配置"""
+        validation_result = validate_config(load_config())
+        
+        if not validation_result["valid"]:
+            logger.warning(f"配置验证失败: {validation_result['error_count']} 个错误")
+            for error in validation_result["errors"]:
+                if error.field.startswith("wechat"):
+                    logger.error(f"微信配置错误: {error.message}")
+        
+        if validation_result["warnings"]:
+            for warning in validation_result["warnings"]:
+                logger.info(f"配置警告: {warning.message}")
     
     def get_access_token(self) -> Optional[str]:
-        """获取访问令牌（带缓存）"""
+        """获取访问令牌（带缓存和重试）"""
         if self.access_token and time.time() < self.token_expires_at:
             return self.access_token
         
@@ -56,26 +87,42 @@ class WeChatPublisher:
             "secret": self.app_secret
         }
         
-        try:
-            response = requests.get(url, params=params, timeout=10)
+        @with_retry(max_retries=2, delay=1.0)
+        def _fetch_token():
+            # 使用代理
+            proxies = self.proxies if self.use_proxy else {}
+            
+            response = requests.get(url, params=params, timeout=10, proxies=proxies)
             data = response.json()
             
             if "access_token" in data:
-                self.access_token = data["access_token"]
-                expires_in = data.get("expires_in", 7200)
-                self.token_expires_at = time.time() + expires_in - 300
-                logger.info("Access token refreshed")
-                return self.access_token
+                return data
             else:
-                logger.error(f"Failed to get access_token: {data}")
-                return None
+                error_msg = data.get("errmsg", "Unknown error")
+                error_code = data.get("errcode", -1)
+                raise AppError(
+                    f"获取 access_token 失败: {error_msg}",
+                    error_type=ErrorType.AUTH,
+                    context={"error_code": error_code}
+                )
+        
+        try:
+            data = _fetch_token()
+            self.access_token = data["access_token"]
+            expires_in = data.get("expires_in", 7200)
+            self.token_expires_at = time.time() + expires_in - 300
+            logger.info("Access token refreshed")
+            return self.access_token
+        except AppError as e:
+            logger.error(f"获取 access_token 失败: {e}")
+            return None
         except Exception as e:
-            logger.error(f"Error getting access_token: {e}")
+            logger.error(f"获取 access_token 异常: {e}")
             return None
     
     def create_draft(self, title: str, content: str, author: str = "", 
                     digest: str = "", cover_path: str = "") -> Optional[str]:
-        """创建草稿"""
+        """创建草稿（带代理支持和重试）"""
         token = self.get_access_token()
         if not token:
             logger.error("Failed to get access token")
@@ -100,23 +147,53 @@ class WeChatPublisher:
         params = {"access_token": token}
         data = {"articles": [article]}
         
-        try:
-            response = requests.post(url, params=params, json=data, timeout=30)
+        @with_retry(max_retries=2, delay=1.0)
+        def _create_draft():
+            # 使用代理
+            proxies = self.proxies if self.use_proxy else {}
+            
+            response = requests.post(url, params=params, json=data, timeout=30, proxies=proxies)
             result = response.json()
             
             if result.get("errcode") == 0:
-                media_id = result.get("media_id")
-                logger.info(f"Draft created: {media_id}")
-                return media_id
+                return result.get("media_id")
             else:
-                logger.error(f"Failed to create draft: {result}")
-                return None
+                error_msg = result.get("errmsg", "Unknown error")
+                error_code = result.get("errcode", -1)
+                raise AppError(
+                    f"创建草稿失败: {error_msg}",
+                    error_type=ErrorType.SYSTEM,
+                    context={"error_code": error_code, "title": title}
+                )
+        
+        try:
+            media_id = _create_draft()
+            logger.info(f"Draft created: {media_id}")
+            
+            # 更新健康监控
+            if self._health_checker:
+                self._health_checker.inc_published(1)
+            
+            return media_id
+        except AppError as e:
+            logger.error(f"创建草稿失败: {e}")
+            
+            # 更新健康监控
+            if self._health_checker:
+                self._health_checker.inc_publish_failure(1)
+            
+            return None
         except Exception as e:
-            logger.error(f"Error creating draft: {e}")
+            logger.error(f"创建草稿异常: {e}")
+            
+            # 更新健康监控
+            if self._health_checker:
+                self._health_checker.inc_publish_failure(1)
+            
             return None
     
     def publish_draft(self, media_id: str) -> Optional[str]:
-        """发布草稿"""
+        """发布草稿（带代理支持和重试）"""
         token = self.get_access_token()
         if not token:
             return None
@@ -125,23 +202,53 @@ class WeChatPublisher:
         params = {"access_token": token}
         data = {"media_id": media_id, "publish_id": 0}
         
-        try:
-            response = requests.post(url, params=params, json=data, timeout=30)
+        @with_retry(max_retries=2, delay=1.0)
+        def _publish_draft():
+            # 使用代理
+            proxies = self.proxies if self.use_proxy else {}
+            
+            response = requests.post(url, params=params, json=data, timeout=30, proxies=proxies)
             result = response.json()
             
             if result.get("errcode") == 0:
-                publish_id = result.get("publish_id")
-                logger.info(f"Published: {publish_id}")
-                return str(publish_id)
+                return result.get("publish_id")
             else:
-                logger.error(f"Failed to publish: {result}")
-                return None
+                error_msg = result.get("errmsg", "Unknown error")
+                error_code = result.get("errcode", -1)
+                raise AppError(
+                    f"发布草稿失败: {error_msg}",
+                    error_type=ErrorType.SYSTEM,
+                    context={"error_code": error_code, "media_id": media_id}
+                )
+        
+        try:
+            publish_id = _publish_draft()
+            logger.info(f"Published: {publish_id}")
+            
+            # 更新健康监控
+            if self._health_checker:
+                self._health_checker.inc_published(1)
+            
+            return str(publish_id)
+        except AppError as e:
+            logger.error(f"发布草稿失败: {e}")
+            
+            # 更新健康监控
+            if self._health_checker:
+                self._health_checker.inc_publish_failure(1)
+            
+            return None
         except Exception as e:
-            logger.error(f"Error publishing: {e}")
+            logger.error(f"发布草稿异常: {e}")
+            
+            # 更新健康监控
+            if self._health_checker:
+                self._health_checker.inc_publish_failure(1)
+            
             return None
     
     def _upload_media(self, file_path: str, media_type: str = "image") -> Optional[str]:
-        """上传素材"""
+        """上传素材（带代理支持）"""
         token = self.get_access_token()
         if not token:
             return None
@@ -150,9 +257,12 @@ class WeChatPublisher:
         params = {"access_token": token, "type": media_type}
         
         try:
+            # 使用代理
+            proxies = self.proxies if self.use_proxy else {}
+            
             with open(file_path, "rb") as f:
                 files = {"media": f}
-                response = requests.post(url, params=params, files=files, timeout=60)
+                response = requests.post(url, params=params, files=files, timeout=60, proxies=proxies)
                 result = response.json()
                 
                 if result.get("errcode") == 0:

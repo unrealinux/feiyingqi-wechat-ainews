@@ -46,6 +46,16 @@ htmlcov/
 *.sqlite3
 .env
 
+# Config with sensitive data
+config.yaml
+!config.yaml.example
+
+# Cover images
+cover.png
+
+# Temp files
+nul
+
 # Output files
 output/*.html
 output/*.md

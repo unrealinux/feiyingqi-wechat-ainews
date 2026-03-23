@@ -1,13 +1,24 @@
 """
 Cover Image Generator - 公众号封面图生成器 (优化版)
-优化点：字体缓存、自定义配色、文本换行、圆角背景、渐变文字等
+参考 FeiqingqiWechatMP 的 coverGenerator.js 实现
+
+优化点：
+1. 字体缓存、自定义配色、文本换行
+2. 渐变背景 + 光晕效果 (参考JS版)
+3. 暗角效果 (Vignette)
+4. 多层文字叠加 + 阴影
+5. AI图片生成支持 (OpenAI/GLM)
+6. 智能缓存系统
+7. 内容感知风格选择
 """
 import os
 import random
 import math
+import hashlib
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Tuple, Optional
+from io import BytesIO
 
 from src.logger import get_logger
 
@@ -75,8 +86,14 @@ class CoverGenerator:
             "/System/Library/Fonts/STHeiti Light.ttc",
             "/System/Library/Fonts/Helvetica.ttc",
             "C:/Windows/Fonts/msyh.ttc",
+            "C:/Windows/Fonts/simhei.ttf",
+            "C:/Windows/Fonts/arial.ttf",
             "/usr/share/fonts/truetype/droid/DroidSansFallbackFull.ttf",
         ]
+        
+        # 缓存目录 (参考FeiqingqiWechatMP)
+        self.cache_dir = Path("cache/covers")
+        self.cache_dir.mkdir(parents=True, exist_ok=True)
     
     def generate_cover(
         self,
@@ -87,9 +104,11 @@ class CoverGenerator:
         bg_blend_alpha: float = 0.3,
         rounded_corners: int = 0,
         text_wrap_width: int = 30,
-        gradient_text: bool = False
+        gradient_text: bool = False,
+        use_cache: bool = True,
+        add_vignette: bool = True
     ) -> str:
-        """生成封面图
+        """生成封面图 (优化版，参考FeiqingqiWechatMP)
         
         Args:
             title: 文章标题
@@ -100,24 +119,33 @@ class CoverGenerator:
             rounded_corners: 圆角半径 (0表示无圆角)
             text_wrap_width: 文本换行宽度（字符数）
             gradient_text: 是否使用渐变文字
+            use_cache: 是否使用缓存
+            add_vignette: 是否添加暗角效果
         """
         if not PIL_AVAILABLE:
             logger.error("PIL not installed. Run: pip install Pillow")
             return ""
         
         try:
+            # 检查缓存
+            if use_cache:
+                cache_key = self._get_cache_key(title, style)
+                cached_data = self._get_cached_cover(cache_key)
+                if cached_data:
+                    # 保存缓存的图片到输出路径
+                    Path(output_path).parent.mkdir(parents=True, exist_ok=True)
+                    with open(output_path, "wb") as f:
+                        f.write(cached_data)
+                    logger.info(f"使用缓存封面图: {output_path}")
+                    return output_path
+            
             # 选择颜色方案
             color_scheme = random.choice(self.color_schemes)
             
-            # 如果是auto，随机选择风格
+            # 如果是auto，根据内容智能选择风格
             if style == "auto":
-                style = random.choice([
-                    self.STYLE_NEURAL, 
-                    self.STYLE_CIRCUIT, 
-                    self.STYLE_BINARY,
-                    self.STYLE_PARTICLES,
-                    self.STYLE_GRID
-                ])
+                style = self.select_style_by_content(title)
+                logger.info(f"智能选择风格: {style}")
             
             # 创建基础图片
             if bg_image_path and os.path.exists(bg_image_path):
@@ -145,15 +173,24 @@ class CoverGenerator:
             if rounded_corners > 0:
                 img = self._apply_rounded_corners(img, rounded_corners, color_scheme["bg"])
             
+            # 添加暗角效果 (参考FeiqingqiWechatMP)
+            if add_vignette:
+                img = self._add_vignette(img, intensity=0.3)
+            
             # 保存图片
             Path(output_path).parent.mkdir(parents=True, exist_ok=True)
             img.save(output_path, 'PNG', quality=95)
             
-            logger.info(f"Cover generated: {output_path}")
+            # 同时保存到缓存
+            if use_cache:
+                with open(output_path, "rb") as f:
+                    self._save_to_cache(cache_key, f.read())
+            
+            logger.info(f"封面图生成完成: {output_path}")
             return output_path
             
         except Exception as e:
-            logger.error(f"Failed to generate cover: {e}")
+            logger.error(f"封面图生成失败: {e}")
             return ""
     
     def _draw_ai_background(self, draw, colors: dict, style: str):
@@ -498,6 +535,243 @@ class CoverGenerator:
         """将十六进制颜色转换为RGB"""
         hex_color = hex_color.lstrip('#')
         return tuple(int(hex_color[i:i+2], 16) for i in (0, 2, 4))
+    
+    def _get_cache_key(self, title: str, style: str = "auto") -> str:
+        """生成缓存键 (参考FeiqingqiWechatMP)"""
+        key_string = f"{title}|{style}|{datetime.now().strftime('%Y%m%d')}"
+        return hashlib.md5(key_string.encode()).hexdigest()
+    
+    def _get_cached_cover(self, cache_key: str) -> Optional[bytes]:
+        """获取缓存的封面图"""
+        cache_path = self.cache_dir / f"{cache_key}.png"
+        if cache_path.exists():
+            try:
+                with open(cache_path, "rb") as f:
+                    return f.read()
+            except Exception:
+                pass
+        return None
+    
+    def _save_to_cache(self, cache_key: str, image_data: bytes):
+        """保存封面图到缓存"""
+        cache_path = self.cache_dir / f"{cache_key}.png"
+        try:
+            with open(cache_path, "wb") as f:
+                f.write(image_data)
+        except Exception as e:
+            logger.warning(f"缓存保存失败: {e}")
+    
+    def _add_vignette(self, img: Image.Image, intensity: float = 0.4) -> Image.Image:
+        """添加暗角效果 (参考FeiqingqiWechatMP的_createVignette)"""
+        if not PIL_AVAILABLE:
+            return img
+        
+        # 创建暗角遮罩
+        vignette = Image.new('RGBA', img.size, (0, 0, 0, 0))
+        draw = ImageDraw.Draw(vignette)
+        
+        # 绘制径向渐变暗角
+        center_x, center_y = img.width // 2, img.height // 2
+        max_radius = max(img.width, img.height)
+        
+        for i in range(20, 0, -1):
+            radius = int(max_radius * i / 20)
+            opacity = int(255 * intensity * (20 - i) / 20)
+            draw.ellipse(
+                [(center_x - radius, center_y - radius),
+                 (center_x + radius, center_y + radius)],
+                fill=(0, 0, 0, opacity)
+            )
+        
+        # 合成图像
+        img = img.convert('RGBA')
+        result = Image.alpha_composite(img, vignette)
+        return result.convert('RGB')
+    
+    def _create_gradient_with_glow(self, colors: List[str], width: int, height: int) -> Image.Image:
+        """创建带光晕效果的渐变背景 (参考FeiqingqiWechatMP)"""
+        if not PIL_AVAILABLE:
+            return None
+        
+        img = Image.new('RGB', (width, height))
+        draw = ImageDraw.Draw(img)
+        
+        # 转换颜色
+        rgb_colors = [self._hex_to_rgb(c) for c in colors]
+        
+        # 创建线性渐变（从左上到右下）
+        for y in range(height):
+            for x in range(width):
+                # 计算渐变位置（对角线方向）
+                t = (x / width + y / height) / 2
+                
+                # 在颜色之间插值
+                if len(rgb_colors) == 2:
+                    r = int(rgb_colors[0][0] + (rgb_colors[1][0] - rgb_colors[0][0]) * t)
+                    g = int(rgb_colors[0][1] + (rgb_colors[1][1] - rgb_colors[0][1]) * t)
+                    b = int(rgb_colors[0][2] + (rgb_colors[1][2] - rgb_colors[0][2]) * t)
+                else:
+                    # 多色渐变
+                    segment = t * (len(rgb_colors) - 1)
+                    idx = int(segment)
+                    if idx >= len(rgb_colors) - 1:
+                        r, g, b = rgb_colors[-1]
+                    else:
+                        local_t = segment - idx
+                        r = int(rgb_colors[idx][0] + (rgb_colors[idx+1][0] - rgb_colors[idx][0]) * local_t)
+                        g = int(rgb_colors[idx][1] + (rgb_colors[idx+1][1] - rgb_colors[idx][1]) * local_t)
+                        b = int(rgb_colors[idx][2] + (rgb_colors[idx+1][2] - rgb_colors[idx][2]) * local_t)
+                
+                img.putpixel((x, y), (r, g, b))
+        
+        # 添加光晕效果 (参考FeiqingqiWechatMP)
+        center_x, center_y = width * 0.3, height * 0.5
+        max_dist = math.sqrt(center_x**2 + center_y**2)
+        
+        for y in range(height):
+            for x in range(width):
+                dist = math.sqrt((x - center_x)**2 + (y - center_y)**2)
+                if dist < max_dist * 0.5:
+                    intensity = 1 - (dist / (max_dist * 0.5))
+                    intensity = intensity * 0.15  # 控制光晕强度
+                    
+                    r, g, b = img.getpixel((x, y))
+                    r = min(255, int(r + (255 - r) * intensity))
+                    g = min(255, int(g + (255 - g) * intensity))
+                    b = min(255, int(b + (255 - b) * intensity))
+                    img.putpixel((x, y), (r, g, b))
+        
+        return img
+    
+    def select_style_by_content(self, title: str) -> str:
+        """根据内容智能选择风格 (参考FeiqingqiWechatMP的_selectWineElement)"""
+        text = title.lower()
+        
+        # 关键词映射
+        style_keywords = {
+            "neural": ["神经", "深度学习", "模型", "训练", "neural", "deep learning", "model"],
+            "circuit": ["芯片", "硬件", "处理器", "算力", "chip", "hardware", "processor"],
+            "binary": ["数据", "算法", "代码", "编程", "data", "algorithm", "code"],
+            "particles": ["量子", "物理", "粒子", "quantum", "physics", "particle"],
+            "grid": ["网格", "架构", "系统", "网络", "architecture", "system", "network"]
+        }
+        
+        # 计算每个风格的匹配分数
+        scores = {}
+        for style, keywords in style_keywords.items():
+            score = sum(1 for kw in keywords if kw in text)
+            scores[style] = score
+        
+        # 返回得分最高的风格，如果没有匹配则随机选择
+        best_style = max(scores, key=scores.get)
+        if scores[best_style] == 0:
+            return random.choice(list(style_keywords.keys()))
+        return best_style
+    
+    def generate_with_ai(self, title: str, api_key: str = "", 
+                        provider: str = "openai") -> Optional[bytes]:
+        """使用AI生成封面图 (参考FeiqingqiWechatMP的ai-image-generator.js)"""
+        if not api_key:
+            logger.warning("未配置AI API密钥，跳过AI生成")
+            return None
+        
+        try:
+            import requests
+            
+            prompt = f"""Create a professional WeChat article cover image for AI technology news.
+            
+Title: {title}
+Style: Modern tech, dark gradient, professional, minimalist
+Requirements:
+- 900x383 aspect ratio (2.35:1)
+- Dark blue/purple color palette
+- Abstract tech elements (neural network, circuit patterns)
+- Clean, modern design suitable for tech news
+- No text in image (text will be added separately)"""
+            
+            if provider == "openai":
+                return self._generate_with_openai(title, api_key, prompt)
+            elif provider == "glm":
+                return self._generate_with_glm(title, api_key, prompt)
+            else:
+                logger.warning(f"不支持的AI提供商: {provider}")
+                return None
+                
+        except Exception as e:
+            logger.error(f"AI封面生成失败: {e}")
+            return None
+    
+    def _generate_with_openai(self, title: str, api_key: str, prompt: str) -> Optional[bytes]:
+        """使用OpenAI DALL-E生成封面"""
+        import requests
+        import base64
+        
+        response = requests.post(
+            "https://api.openai.com/v1/images/generations",
+            headers={
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json"
+            },
+            json={
+                "model": "dall-e-3",
+                "prompt": prompt,
+                "size": "1792x1024",
+                "quality": "standard",
+                "n": 1,
+                "response_format": "b64_json"
+            },
+            timeout=60
+        )
+        
+        if response.status_code == 200:
+            data = response.json()
+            image_data = base64.b64decode(data["data"][0]["b64_json"])
+            
+            # 调整大小
+            img = Image.open(BytesIO(image_data))
+            img = img.resize((self.width, self.height), Image.Resampling.LANCZOS)
+            
+            # 转换为bytes
+            buffer = BytesIO()
+            img.save(buffer, format='PNG')
+            return buffer.getvalue()
+        else:
+            logger.error(f"OpenAI API错误: {response.status_code}")
+            return None
+    
+    def _generate_with_glm(self, title: str, api_key: str, prompt: str) -> Optional[bytes]:
+        """使用智谱AI GLM生成封面"""
+        import requests
+        
+        response = requests.post(
+            "https://open.bigmodel.cn/api/paas/v4/images/generations",
+            headers={
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json"
+            },
+            json={
+                "model": "cogview-4",
+                "prompt": prompt,
+                "size": "1024x1024"
+            },
+            timeout=60
+        )
+        
+        if response.status_code == 200:
+            data = response.json()
+            image_url = data["data"][0]["url"]
+            
+            # 下载图像
+            img_response = requests.get(image_url, timeout=30)
+            if img_response.status_code == 200:
+                img = Image.open(BytesIO(img_response.content))
+                img = img.resize((self.width, self.height), Image.Resampling.LANCZOS)
+                
+                buffer = BytesIO()
+                img.save(buffer, format='PNG')
+                return buffer.getvalue()
+        
+        return None
 
 
 # 便捷函数
@@ -512,12 +786,42 @@ def generate_cover_image(
     return generator.generate_cover(title, output_path, style, **kwargs)
 
 
+def generate_smart_cover(
+    title: str,
+    output_path: str = "output/cover.png",
+    ai_api_key: str = "",
+    ai_provider: str = "openai",
+    **kwargs
+) -> str:
+    """智能生成封面图 - 优先使用AI，失败则使用本地生成
+    
+    参考 FeiqingqiWechatMP 的 enhanced-cover-generator.js 实现
+    """
+    generator = CoverGenerator()
+    
+    # 尝试AI生成
+    if ai_api_key:
+        logger.info("尝试AI生成封面...")
+        ai_cover = generator.generate_with_ai(title, ai_api_key, ai_provider)
+        if ai_cover:
+            # 保存AI生成的封面
+            Path(output_path).parent.mkdir(parents=True, exist_ok=True)
+            with open(output_path, "wb") as f:
+                f.write(ai_cover)
+            logger.info(f"AI封面生成成功: {output_path}")
+            return output_path
+        logger.warning("AI生成失败，使用本地生成...")
+    
+    # 使用本地生成
+    return generator.generate_cover(title, output_path, **kwargs)
+
+
 if __name__ == "__main__":
     import sys
     
-    title = sys.argv[1] if len(sys.argv) > 1 else "AI News Cover"
+    title = sys.argv[1] if len(sys.argv) > 1 else "AI热点速递 | 2026年3月22日"
     output = sys.argv[2] if len(sys.argv) > 2 else "output/cover.png"
     style = sys.argv[3] if len(sys.argv) > 3 else "auto"
     
     result = generate_cover_image(title, output, style)
-    print(f"Cover generated: {result}")
+    print(f"封面图生成完成: {result}")

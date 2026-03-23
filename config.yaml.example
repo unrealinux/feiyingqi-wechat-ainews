@@ -1,0 +1,74 @@
+# 微信公众号配置
+wechat:
+  app_id: "your_app_id_here"
+  app_secret: "your_app_secret_here"
+
+# LLM 配置 - 国内推荐 DeepSeek/智谱AI (免费额度)
+# 优先级: DeepSeek > 智谱AI > SiliconFlow > OpenAI
+llm:
+  provider: "auto"  # auto, deepseek, zhipu, siliconflow, openai
+
+openai:
+  api_key: "your_openai_api_key_here"
+  model: "gpt-4o-mini"
+
+# DeepSeek (推荐 - 免费额度多)
+deepseek:
+  api_key: ""  # https://platform.deepseek.com/
+  model: "deepseek-chat"
+
+# 智谱AI (免费额度)
+zhipu:
+  api_key: "your_zhipu_api_key_here"  # https://open.bigmodel.cn/
+  model: "glm-4"
+
+# SiliconFlow (便宜)
+siliconflow:
+  api_key: ""  # https://siliconflow.cn
+  model: "Qwen/Qwen2-7B-Instruct"
+
+# 阿里通义万相 Z-Image (国内)
+zimage:
+  api_key: "your_zimage_api_key_here"
+
+news:
+  search_keywords:
+    - "AI 人工智能"
+    - "大语言模型 LLM"
+    - "GPT OpenAI"
+    - "大模型 国产"
+    - "AI 科技"
+  max_results_per_search: 10
+  max_news: 15
+  exclude_keywords:
+    - "广告"
+    - "招聘"
+  
+  # 国内新闻源
+  sources:
+    search: false
+    rss: false
+    hackernews: false
+    websites: false
+  
+  # 国内专用新闻源
+  domestic_sources:
+    enabled: true
+    bing_china: true
+    baidu: true
+    weibo: true
+    zhihu: true
+    36kr: true
+    liangzi: true
+    jiqizhixin: true
+    huxiu: true
+
+publish:
+  author: "AI前沿观察"
+  default_cover: "cover.png"
+  default_digest: "每日AI资讯汇总，带你掌握AI行业最新动态"
+
+scheduler:
+  enabled: false
+  time: "08:00"
+  timezone: "Asia/Shanghai"
