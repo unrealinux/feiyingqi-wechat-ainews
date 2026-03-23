@@ -17,16 +17,48 @@ from pathlib import Path
 class FreeImageAPI:
     """免费图片API - 获取科技风格封面图"""
     
-    # AI科技相关的搜索关键词
-    TECH_KEYWORDS = [
-        "artificial intelligence data center",
-        "neural network visualization",
-        "futuristic technology server",
-        "blue technology abstract",
-        "digital transformation",
-        "machine learning",
-        "cyber security",
-        "cloud computing"
+    # AI科技相关的搜索关键词（更精准，按优先级排序）
+    AI_KEYWORDS = {
+        "datacenter": [
+            "AI neural network visualization",  # 神经网络可视化
+            "deep learning technology",          # 深度学习技术
+            "artificial intelligence brain",     # AI大脑
+            "machine learning data flow",        # 机器学习数据流
+            "AI data center blue lights"         # AI数据中心
+        ],
+        "chip": [
+            "AI chip processor technology",
+            "artificial intelligence microchip",
+            "neural network circuit board",
+            "deep learning GPU"
+        ],
+        "robot": [
+            "artificial intelligence robot",
+            "AI humanoid robot",
+            "machine learning automation",
+            "intelligent robot technology"
+        ],
+        "neural": [
+            "neural network visualization",
+            "deep learning artificial brain",
+            "AI neural connections",
+            "machine learning data flow"
+        ],
+        "office": [
+            "AI technology office",
+            "artificial intelligence workspace",
+            "smart office technology",
+            "digital transformation office"
+        ]
+    }
+    
+    # 通用AI关键词（兜底）
+    GENERAL_AI_KEYWORDS = [
+        "artificial intelligence technology",
+        "AI machine learning",
+        "deep learning neural network",
+        "futuristic AI technology",
+        "blue technology abstract AI"
     ]
     
     # 不需要代理的API
@@ -52,13 +84,15 @@ class FreeImageAPI:
     
     def search_image(self, 
                      query: str = "artificial intelligence",
-                     provider: str = "auto") -> Optional[bytes]:
+                     provider: str = "auto",
+                     use_proxy: bool = False) -> Optional[bytes]:
         """
         搜索并下载图片
         
         Args:
             query: 搜索关键词
             provider: API提供商 (auto, unsplash, pexels, pixabay)
+            use_proxy: 是否使用代理（Pexels/Pixabay国内可直接访问，无需代理）
         
         Returns:
             图片字节数据，失败返回None
@@ -84,29 +118,37 @@ class FreeImageAPI:
             print(f"[Error] 不支持的API: {provider}")
             return None
         
-        return search_func(query)
+        return search_func(query, use_proxy)
     
-    def search_tech_image(self, style: str = "datacenter") -> Optional[bytes]:
+    def search_tech_image(self, style: str = "datacenter", use_proxy: bool = False) -> Optional[bytes]:
         """
-        搜索科技风格图片
+        搜索AI科技风格图片（优化版）
         
         Args:
             style: 风格 (datacenter, chip, robot, neural, office)
+            use_proxy: 是否使用代理
         
         Returns:
             图片字节数据
         """
-        # 根据风格选择关键词
-        keyword_map = {
-            "datacenter": "server room data center technology",
-            "chip": "processor chip circuit board technology",
-            "robot": "artificial intelligence robot futuristic",
-            "neural": "neural network abstract technology",
-            "office": "modern tech office digital transformation"
-        }
+        # 获取该风格的关键词列表
+        keywords_list = self.AI_KEYWORDS.get(style, self.AI_KEYWORDS["datacenter"])
         
-        query = keyword_map.get(style, "artificial intelligence technology")
-        return self.search_image(query)
+        # 尝试每个关键词，直到找到合适的图片
+        for query in keywords_list:
+            print(f"[Search] 尝试关键词: {query}")
+            image_data = self.search_image(query, use_proxy=use_proxy)
+            if image_data:
+                return image_data
+        
+        # 如果都失败，尝试通用AI关键词
+        print("[Search] 尝试通用AI关键词...")
+        for query in self.GENERAL_AI_KEYWORDS:
+            image_data = self.search_image(query, use_proxy=use_proxy)
+            if image_data:
+                return image_data
+        
+        return None
     
     def _select_available_provider(self) -> Optional[str]:
         """选择可用的API提供商"""
@@ -123,17 +165,20 @@ class FreeImageAPI:
         return None
     
     # ==================== Unsplash API ====================
-    def _search_unsplash(self, query: str) -> Optional[bytes]:
+    def _search_unsplash(self, query: str, use_proxy: bool = False) -> Optional[bytes]:
         """
         使用Unsplash搜索图片
         
         注册地址: https://unsplash.com/developers
         免费额度: 50次/小时
+        注意: Unsplash需要代理访问
         """
         access_key = self.config.get("unsplash")
         if not access_key:
             print("[Error] 未配置Unsplash API密钥")
             return None
+        
+        proxies = {"http": self.proxy, "https": self.proxy} if use_proxy and self.proxy else None
         
         try:
             # 搜索图片
@@ -145,10 +190,10 @@ class FreeImageAPI:
                 },
                 params={
                     "query": query,
-                    "per_page": 1,
+                    "per_page": 5,
                     "orientation": "landscape"
                 },
-                proxies=self.proxies,
+                proxies=proxies,
                 timeout=30
             )
             
@@ -156,12 +201,16 @@ class FreeImageAPI:
                 data = response.json()
                 if data.get("results") and len(data["results"]) > 0:
                     # 获取图片URL
-                    image_url = data["results"][0]["urls"]["regular"]
+                    result = data["results"][0]
+                    image_url = result["urls"]["regular"]
+                    
+                    print(f"[Info] 找到图片: {result.get('description', 'N/A')}")
+                    print(f"[Info] 摄影师: {result.get('user', {}).get('name', 'N/A')}")
                     
                     # 下载图片
                     img_response = requests.get(
                         image_url,
-                        proxies=self.proxies,
+                        proxies=proxies,
                         timeout=60
                     )
                     
@@ -177,7 +226,7 @@ class FreeImageAPI:
         return None
     
     # ==================== Pexels API ====================
-    def _search_pexels(self, query: str) -> Optional[bytes]:
+    def _search_pexels(self, query: str, use_proxy: bool = False) -> Optional[bytes]:
         """
         使用Pexels搜索图片
         
@@ -199,7 +248,7 @@ class FreeImageAPI:
                 },
                 params={
                     "query": query,
-                    "per_page": 3,
+                    "per_page": 5,  # 获取更多结果以选择最佳图片
                     "orientation": "landscape"
                 },
                 timeout=30
@@ -208,8 +257,12 @@ class FreeImageAPI:
             if response.status_code == 200:
                 data = response.json()
                 if data.get("photos") and len(data["photos"]) > 0:
-                    # 获取图片URL
-                    image_url = data["photos"][0]["src"]["large"]
+                    # 选择第一张图片（通常是最佳匹配）
+                    photo = data["photos"][0]
+                    image_url = photo["src"]["large"]
+                    
+                    print(f"[Info] 找到图片: {photo.get('alt', 'N/A')}")
+                    print(f"[Info] 摄影师: {photo.get('photographer', 'N/A')}")
                     
                     # 下载图片 - 也不使用代理
                     img_response = requests.get(
@@ -229,7 +282,7 @@ class FreeImageAPI:
         return None
     
     # ==================== Pixabay API ====================
-    def _search_pixabay(self, query: str) -> Optional[bytes]:
+    def _search_pixabay(self, query: str, use_proxy: bool = False) -> Optional[bytes]:
         """
         使用Pixabay搜索图片
         
@@ -249,10 +302,11 @@ class FreeImageAPI:
                 params={
                     "key": api_key,
                     "q": query,
-                    "per_page": 3,
+                    "per_page": 5,
                     "orientation": "horizontal",
                     "image_type": "photo",
-                    "min_width": 1920
+                    "min_width": 1920,
+                    "safesearch": "true"
                 },
                 timeout=30
             )
@@ -261,7 +315,10 @@ class FreeImageAPI:
                 data = response.json()
                 if data.get("hits") and len(data["hits"]) > 0:
                     # 获取图片URL
-                    image_url = data["hits"][0]["largeImageURL"]
+                    hit = data["hits"][0]
+                    image_url = hit["largeImageURL"]
+                    
+                    print(f"[Info] 找到图片: {hit.get('tags', 'N/A')}")
                     
                     # 下载图片 - 也不使用代理
                     img_response = requests.get(
