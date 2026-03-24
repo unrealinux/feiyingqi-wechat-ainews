@@ -34,3 +34,23 @@ def get_publish_config(config: dict) -> dict:
 
 def get_scheduler_config(config: dict) -> dict:
     return config.get("scheduler", {})
+
+
+def get_llm_config(config: dict) -> dict:
+    """获取LLM配置"""
+    return config.get("llm", {})
+
+
+def get_deepseek_config(config: dict) -> dict:
+    """获取DeepSeek配置"""
+    return config.get("deepseek", {})
+
+
+def get_zhipu_config(config: dict) -> dict:
+    """获取智谱AI配置"""
+    return config.get("zhipu", {})
+
+
+def get_siliconflow_config(config: dict) -> dict:
+    """获取SiliconFlow配置"""
+    return config.get("siliconflow", {})

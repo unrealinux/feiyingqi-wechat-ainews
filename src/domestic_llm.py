@@ -22,6 +22,7 @@ class LLMBase(ABC):
     
     @abstractmethod
     def get_name(self) -> str:
+        pass
 
 
 class DeepSeekLLM(LLMBase):
@@ -182,21 +183,55 @@ class DomesticLLM:
     
     def __init__(self):
         self.llms = []
+        self._load_config()
         self._init_llms()
+    
+    def _load_config(self):
+        """从 config.yaml 加载配置"""
+        try:
+            from src.config import load_config
+            config = load_config()
+            
+            # 读取各个 LLM 的配置
+            deepseek_config = config.get("deepseek", {})
+            zhipu_config = config.get("zhipu", {})
+            siliconflow_config = config.get("siliconflow", {})
+            
+            # 获取 API Key（优先使用配置文件中的，其次使用环境变量）
+            self.deepseek_api_key = deepseek_config.get("api_key", "") or os.environ.get("DEEPSEEK_API_KEY", "")
+            self.deepseek_model = deepseek_config.get("model", os.environ.get("DEEPSEEK_MODEL", "deepseek-chat"))
+            
+            self.zhipu_api_key = zhipu_config.get("api_key", "") or os.environ.get("ZHIPU_API_KEY", "")
+            self.zhipu_model = zhipu_config.get("model", os.environ.get("ZHIPU_MODEL", "glm-4"))
+            
+            self.siliconflow_api_key = siliconflow_config.get("api_key", "") or os.environ.get("SILICONFLOW_API_KEY", "")
+            self.siliconflow_model = siliconflow_config.get("model", os.environ.get("SILICONFLOW_MODEL", "Qwen/Qwen2-7B-Instruct"))
+            
+        except Exception as e:
+            logger.warning(f"Failed to load config from config.yaml: {e}")
+            # 如果加载配置失败，使用环境变量
+            self.deepseek_api_key = os.environ.get("DEEPSEEK_API_KEY", "")
+            self.deepseek_model = os.environ.get("DEEPSEEK_MODEL", "deepseek-chat")
+            
+            self.zhipu_api_key = os.environ.get("ZHIPU_API_KEY", "")
+            self.zhipu_model = os.environ.get("ZHIPU_MODEL", "glm-4")
+            
+            self.siliconflow_api_key = os.environ.get("SILICONFLOW_API_KEY", "")
+            self.siliconflow_model = os.environ.get("SILICONFLOW_MODEL", "Qwen/Qwen2-7B-Instruct")
     
     def _init_llms(self):
         # 按优先级添加
-        deepseek = DeepSeekLLM()
+        deepseek = DeepSeekLLM(api_key=self.deepseek_api_key)
         if deepseek.enabled:
             self.llms.append(deepseek)
             logger.info("DeepSeek LLM enabled")
         
-        zhipu = ZhipuLLM()
+        zhipu = ZhipuLLM(api_key=self.zhipu_api_key)
         if zhipu.enabled:
             self.llms.append(zhipu)
             logger.info("智谱AI LLM enabled")
         
-        siliconflow = SiliconFlowLLM()
+        siliconflow = SiliconFlowLLM(api_key=self.siliconflow_api_key)
         if siliconflow.enabled:
             self.llms.append(siliconflow)
             logger.info("SiliconFlow LLM enabled")

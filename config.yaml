@@ -6,15 +6,15 @@ wechat:
 # LLM 配置 - 国内推荐 DeepSeek/智谱AI (免费额度)
 # 优先级: DeepSeek > 智谱AI > SiliconFlow > OpenAI
 llm:
-  provider: "auto"  # auto, deepseek, zhipu, siliconflow, openai
+  provider: "deepseek"  # auto, deepseek, zhipu, siliconflow, openai
 
 openai:
-  api_key: "your_openai_api_key_here"
+  api_key: "sk-1fc35b58501a469e82c9eb49a6e8656b"
   model: "gpt-4o-mini"
 
 # DeepSeek (推荐 - 免费额度多)
 deepseek:
-  api_key: ""  # https://platform.deepseek.com/
+  api_key: "sk-1fc35b58501a469e82c9eb49a6e8656b"  # https://platform.deepseek.com/
   model: "deepseek-chat"
 
 # 智谱AI (免费额度)
