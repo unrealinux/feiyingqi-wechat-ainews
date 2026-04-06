@@ -37,6 +37,12 @@ def main():
   python main.py publish              发布最新文章
   python main.py cover                生成封面图
 
+  # 自定义文章
+  python main.py custom-article                      生成AI会议工具横评文章
+  python main.py custom-article --publish            生成并发布到微信草稿箱
+  python main.py custom-article --type meeting_tools_review  指定文章类型
+  python main.py custom-article --ai-cover           使用AI生成封面图
+
   # 服务与管理
   python main.py schedule             启动定时任务
   python main.py dashboard            启动增强版 Web 界面
@@ -85,6 +91,14 @@ def main():
     subparsers.add_parser("validate", help="验证配置")
     subparsers.add_parser("mock", help="使用模拟数据运行")
     
+    # 自定义文章命令
+    custom_parser = subparsers.add_parser("custom-article", help="生成自定义文章")
+    custom_parser.add_argument("--type", choices=["meeting_tools_review"], 
+                              default="meeting_tools_review", help="文章类型")
+    custom_parser.add_argument("--publish", action="store_true", help="自动发布到微信草稿箱")
+    custom_parser.add_argument("--cover", action="store_true", help="生成封面图")
+    custom_parser.add_argument("--ai-cover", action="store_true", help="使用AI生成封面图")
+    
     args = parser.parse_args()
     
     if not args.command:
@@ -122,6 +136,8 @@ def main():
         run_config_validation()
     elif args.command == "mock":
         run_mock_mode()
+    elif args.command == "custom-article":
+        run_custom_article(args)
 
 
 def show_config():
@@ -522,6 +538,71 @@ def run_mock_mode():
             print(f"   - {f}")
     else:
         print(f"\n❌ 运行失败: {result.get('error')}")
+
+
+def run_custom_article(args=None):
+    """生成自定义文章"""
+    from src.custom_article import generate_custom_article
+    from src.publisher import publish_article
+    
+    print("\n" + "="*50)
+    print("[INFO] AI News Publisher - 生成自定义文章")
+    print("="*50)
+    
+    start_time = datetime.now()
+    
+    try:
+        # 1. 确定文章类型
+        article_type = "meeting_tools_review"
+        if args and hasattr(args, 'type'):
+            article_type = args.type
+        
+        print(f"\n[STEP 1/3] 生成{article_type}文章...")
+        
+        # 2. 生成文章
+        article_content = generate_custom_article(article_type)
+        print(f"   生成完成 ({len(article_content)} 字符)")
+        
+        # 3. 确定标题
+        today = datetime.now().strftime("%Y年%m月%d日")
+        if article_type == "meeting_tools_review":
+            title = "AI Meeting Tools Review"
+        else:
+            title = f"{today} Custom Article"
+        
+        # 4. 如果指定了发布参数，发布到草稿箱
+        if args and hasattr(args, 'publish') and args.publish:
+            print("\n[STEP 2/2] 发布到微信草稿箱...")
+            publish_success = publish_article(
+                title=title,
+                content=article_content,
+                auto_publish=False
+            )
+            if publish_success:
+                print("   [SUCCESS] 已发布到微信草稿箱")
+            else:
+                print("   [ERROR] 发布到微信草稿箱失败")
+        else:
+            # 仅保存到本地
+            print("\n[STEP 2/2] 保存文章到本地...")
+            from pathlib import Path
+            output_dir = Path("output")
+            output_dir.mkdir(exist_ok=True)
+            md_path = output_dir / f"article_{datetime.now().strftime('%Y%m%d')}.md"
+            with open(md_path, "w", encoding="utf-8") as f:
+                f.write(article_content)
+            print(f"   已保存: {md_path}")
+        
+        elapsed = (datetime.now() - start_time).total_seconds()
+        
+        print("\n" + "="*50)
+        print("[SUCCESS] 运行完成！")
+        print(f"   耗时: {elapsed:.1f}秒")
+        print("="*50)
+        
+    except Exception as e:
+        print(f"\n[ERROR] 运行失败: {e}")
+        logger.error(f"run_custom_article 失败: {e}", exc_info=True)
 
 
 if __name__ == "__main__":

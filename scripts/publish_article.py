@@ -8,7 +8,7 @@ from datetime import datetime
 from pathlib import Path
 
 # 添加项目根目录到 Python 路径
-sys.path.insert(0, str(Path(__file__).parent))
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from src.publisher import WeChatPublisher, publish_article
 from src.config import load_config

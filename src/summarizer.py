@@ -41,7 +41,12 @@ class Summarizer:
         else:
             try:
                 from openai import OpenAI
-                self.client = OpenAI(api_key=self.api_key)
+                # 设置超时和重试参数
+                self.client = OpenAI(
+                    api_key=self.api_key,
+                    timeout=30.0,  # 30秒超时
+                    max_retries=1  # 最多重试1次
+                )
                 logger.info(f"OpenAI client initialized ({self.model})")
             except ImportError:
                 logger.warning("openai library not installed")

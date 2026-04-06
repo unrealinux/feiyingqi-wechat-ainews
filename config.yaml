@@ -1,7 +1,7 @@
 # 微信公众号配置
 wechat:
-  app_id: "your_app_id_here"
-  app_secret: "your_app_secret_here"
+  app_id: "wx9d3f77c38b0e3843"
+  app_secret: "92f86f0acbc4b5e57f0ff8fdfa0a1c42"
 
 # LLM 配置 - 国内推荐 DeepSeek/智谱AI (免费额度)
 # 优先级: DeepSeek > 智谱AI > SiliconFlow > OpenAI
@@ -68,7 +68,7 @@ news:
     huxiu: true
 
 publish:
-  author: "AI前沿观察"
+  author: "AI Observer"
   default_cover: "cover.png"
   default_digest: "每日AI资讯汇总，带你掌握AI行业最新动态"
 
@@ -76,3 +76,7 @@ scheduler:
   enabled: false
   time: "08:00"
   timezone: "Asia/Shanghai"
+
+# 免费图片API配置
+free_image:
+  pexels: "iTzfFX6upn29gmRWSswjpDWKX9stPO1XClqPSTmKlWnnXs9Si6H4L8Jg"

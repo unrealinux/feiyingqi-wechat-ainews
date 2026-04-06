@@ -128,9 +128,14 @@ class WeChatPublisher:
             logger.error("Failed to get access token")
             return None
         
+        # 记录标题和作者长度，用于调试
+        final_author = author or self.author
+        logger.info(f"Creating draft with title: '{title}' (length: {len(title)})")
+        logger.info(f"Creating draft with author: '{final_author}' (length: {len(final_author)})")
+        
         article = {
             "title": title,
-            "author": author or self.author,
+            "author": final_author,
             "content": content,
             "digest": digest or self.default_digest,
             "content_source_url": "",
@@ -138,10 +143,26 @@ class WeChatPublisher:
             "only_fans_can_comment": 0
         }
         
+        # 处理封面图
         if cover_path and os.path.exists(cover_path):
             media_id = self._upload_media(cover_path, "image")
             if media_id:
                 article["thumb_media_id"] = media_id
+        
+        # 如果没有有效的thumb_media_id，使用默认封面
+        if "thumb_media_id" not in article:
+            default_cover_path = self.default_cover
+            if default_cover_path and os.path.exists(default_cover_path):
+                media_id = self._upload_media(default_cover_path, "image")
+                if media_id:
+                    article["thumb_media_id"] = media_id
+        
+        # 如果仍然没有thumb_media_id，尝试使用cover.png
+        if "thumb_media_id" not in article:
+            if os.path.exists("cover.png"):
+                media_id = self._upload_media("cover.png", "image")
+                if media_id:
+                    article["thumb_media_id"] = media_id
         
         url = "https://api.weixin.qq.com/cgi-bin/draft/add"
         params = {"access_token": token}
@@ -155,15 +176,29 @@ class WeChatPublisher:
             response = requests.post(url, params=params, json=data, timeout=30, proxies=proxies)
             result = response.json()
             
-            if result.get("errcode") == 0:
+            # 添加调试日志
+            logger.info(f"WeChat API response: {result}")
+            
+            # 检查是否有错误码
+            if "errcode" in result:
+                errcode = result.get("errcode")
+                if errcode == 0:
+                    return result.get("media_id")
+                else:
+                    error_msg = result.get("errmsg", "Unknown error")
+                    raise AppError(
+                        f"创建草稿失败: {error_msg}",
+                        error_type=ErrorType.SYSTEM,
+                        context={"error_code": errcode, "title": title}
+                    )
+            # 如果没有错误码，但有media_id，说明创建成功
+            elif "media_id" in result:
                 return result.get("media_id")
             else:
-                error_msg = result.get("errmsg", "Unknown error")
-                error_code = result.get("errcode", -1)
                 raise AppError(
-                    f"创建草稿失败: {error_msg}",
+                    f"创建草稿失败: Unknown error",
                     error_type=ErrorType.SYSTEM,
-                    context={"error_code": error_code, "title": title}
+                    context={"title": title}
                 )
         
         try:
@@ -265,7 +300,16 @@ class WeChatPublisher:
                 response = requests.post(url, params=params, files=files, timeout=60, proxies=proxies)
                 result = response.json()
                 
-                if result.get("errcode") == 0:
+                # 检查是否有错误码
+                if "errcode" in result:
+                    errcode = result.get("errcode")
+                    if errcode == 0:
+                        return result.get("media_id")
+                    else:
+                        logger.error(f"Failed to upload media: {result}")
+                        return None
+                # 如果没有错误码，但有media_id，说明上传成功
+                elif "media_id" in result:
                     return result.get("media_id")
                 else:
                     logger.error(f"Failed to upload media: {result}")
