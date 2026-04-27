@@ -1,7 +1,7 @@
 # 微信公众号配置
 wechat:
   app_id: "wx9d3f77c38b0e3843"
-  app_secret: "92f86f0acbc4b5e57f0ff8fdfa0a1c42"
+  app_secret: "da01df1d03680d706d9ab358294c7c44"
 
 # LLM 配置 - 国内推荐 DeepSeek/智谱AI (免费额度)
 # 优先级: DeepSeek > 智谱AI > SiliconFlow > OpenAI
