@@ -33,6 +33,7 @@ class Scheduler:
         
         self.target_time = scheduler_config.get("time", "08:00")
         self.timezone = scheduler_config.get("timezone", "Asia/Shanghai")
+        self.interval_days = int(scheduler_config.get("interval_days", 1))
         self.enabled = scheduler_config.get("enabled", False)
         
         signal.signal(signal.SIGINT, self._signal_handler)
@@ -50,7 +51,7 @@ class Scheduler:
             return
         
         logger.info("="*50)
-        logger.info(f"Scheduler started - Daily at {self.target_time} ({self.timezone})")
+        logger.info(f"Scheduler started - Every {self.interval_days} day(s) at {self.target_time} ({self.timezone})")
         logger.info("="*50)
         
         self.running = True
@@ -67,7 +68,7 @@ class Scheduler:
             )
             
             if now >= target:
-                target = target + timedelta(days=1)
+                target = target + timedelta(days=self.interval_days)
             
             wait_seconds = (target - now).total_seconds()
             next_run = target.strftime("%Y-%m-%d %H:%M:%S")
@@ -126,8 +127,12 @@ def run_once() -> bool:
         article_content = generate_article(news_items)
         logger.info(f"Article generated ({len(article_content)} characters)")
         
-        today = datetime.now().strftime("%Y年%m月%d日")
-        title = f"🎯 {today} AI 资讯日报"
+        # 从文章提取原创标题（取第一个 Markdown 一级标题）
+        import re
+        title_match = re.search(r"^#\s+(.+)$", article_content, re.MULTILINE)
+        title = title_match.group(1).strip() if title_match else \
+            datetime.now().strftime("%Y年%m月%d日") + " AI 观察"
+        title = title[:40]  # 微信标题上限
         
         logger.info("\n[3/3] Publishing to WeChat...")
         success = publish_article(

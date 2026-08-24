@@ -10,6 +10,9 @@ import logging
 from pathlib import Path
 from datetime import datetime
 
+# 导入自定义模块
+from src.cover_generator import generate_cover_image
+
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s',
@@ -93,7 +96,7 @@ def main():
     
     # 自定义文章命令
     custom_parser = subparsers.add_parser("custom-article", help="生成自定义文章")
-    custom_parser.add_argument("--type", choices=["meeting_tools_review"], 
+    custom_parser.add_argument("--type", choices=["meeting_tools_review", "image_tools_review", "note_tools_review", "search_tools_review", "code_tools_review", "video_tools_review", "audio_tools_review", "office_tools_review", "design_tools_review", "marketing_tools_review", "data_tools_review", "education_tools_review", "medical_tools_review", "finance_tools_review", "legal_tools_review"], 
                               default="meeting_tools_review", help="文章类型")
     custom_parser.add_argument("--publish", action="store_true", help="自动发布到微信草稿箱")
     custom_parser.add_argument("--cover", action="store_true", help="生成封面图")
@@ -542,7 +545,7 @@ def run_mock_mode():
 
 def run_custom_article(args=None):
     """生成自定义文章"""
-    from src.custom_article import generate_custom_article
+    from src.custom_article import generate_custom_article, CustomArticleGenerator
     from src.publisher import publish_article
     
     print("\n" + "="*50)
@@ -564,34 +567,81 @@ def run_custom_article(args=None):
         print(f"   生成完成 ({len(article_content)} 字符)")
         
         # 3. 确定标题
-        today = datetime.now().strftime("%Y年%m月%d日")
         if article_type == "meeting_tools_review":
             title = "AI Meeting Tools Review"
-        else:
-            title = f"{today} Custom Article"
+        elif article_type == "image_tools_review":
+            title = "AI 绘画工具横评"
+        elif article_type == "note_tools_review":
+            title = "AI 笔记工具横评"
+        elif article_type == "search_tools_review":
+            title = "AI 搜索工具横评"
+        elif article_type == "code_tools_review":
+            title = "AI 编程工具横评"
+        elif article_type == "video_tools_review":
+            title = "AI 视频工具横评"
+        elif article_type == "audio_tools_review":
+            title = "AI 音频工具横评"
+        elif article_type == "office_tools_review":
+            title = "AI 办公工具横评"
+        elif article_type == "design_tools_review":
+            title = "AI 设计工具横评"
+        elif article_type == "marketing_tools_review":
+            title = "AI 营销工具横评"
+        elif article_type == "data_tools_review":
+            title = "AI 数据分析工具横评"
+        elif article_type == "education_tools_review":
+            title = "AI 教育工具横评"
+        elif article_type == "medical_tools_review":
+            title = "AI 医疗工具横评"
+        elif article_type == "finance_tools_review":
+            title = "AI 金融工具横评"
+        elif article_type == "legal_tools_review":
+            title = "AI 法律工具横评"
         
-        # 4. 如果指定了发布参数，发布到草稿箱
-        if args and hasattr(args, 'publish') and args.publish:
-            print("\n[STEP 2/2] 发布到微信草稿箱...")
-            publish_success = publish_article(
+        # 4. 发布或保存本地
+        if "--publish" in sys.argv:
+            # 发布到微信草稿箱
+            print(f"\n[STEP 3/3] 发布到微信草稿箱...")
+            
+            # 生成封面图
+            print("   生成封面图...")
+            cover_path = generate_cover_image(title)
+            
+            # 发布
+            result = publish_article(
                 title=title,
                 content=article_content,
-                auto_publish=False
+                author="AI Observer",
+                auto_publish=False,  # 仅创建草稿，不自动发布
+                cover_path=cover_path  # 使用生成的封面图
             )
-            if publish_success:
+            
+            if result:
                 print("   [SUCCESS] 已发布到微信草稿箱")
+                print("   请登录 https://mp.weixin.qq.com 查看草稿")
             else:
                 print("   [ERROR] 发布到微信草稿箱失败")
         else:
             # 仅保存到本地
-            print("\n[STEP 2/2] 保存文章到本地...")
+            print(f"\n[STEP 3/3] 保存文章到本地...")
             from pathlib import Path
             output_dir = Path("output")
             output_dir.mkdir(exist_ok=True)
+            
+            # 保存Markdown
             md_path = output_dir / f"article_{datetime.now().strftime('%Y%m%d')}.md"
             with open(md_path, "w", encoding="utf-8") as f:
                 f.write(article_content)
-            print(f"   已保存: {md_path}")
+            print(f"   已保存 Markdown: {md_path}")
+            
+            # 同时导出HTML（如果有publisher）
+            try:
+                from src.publisher import WeChatPublisher
+                pub = WeChatPublisher()
+                pub.export_html(article_content, title)
+                print(f"   已导出 HTML: output/article_{datetime.now().strftime('%Y%m%d')}.html")
+            except:
+                pass
         
         elapsed = (datetime.now() - start_time).total_seconds()
         

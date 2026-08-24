@@ -23,6 +23,10 @@ def get_wechat_config(config: dict) -> dict:
 def get_openai_config(config: dict) -> dict:
     return config.get("openai", {})
 
+def get_openrouter_config(config: dict) -> dict:
+    """获取OpenRouter配置"""
+    return config.get("openrouter", {})
+
 
 def get_news_config(config: dict) -> dict:
     return config.get("news", {})

@@ -186,25 +186,43 @@ class NewsFetcher:
                     continue
                 future_to_task[future] = task
             
-            for future in as_completed(future_to_task, timeout=self.timeout * 2):
-                task_type, param1, _ = future_to_task[future]
-                try:
-                    results = future.result()
-                    if results:
-                        for item in results:
-                            if item.title and self._should_include(item, exclude_keywords):
-                                all_news.append(item)
-                        logger.info(f"  ✓ {task_type}: +{len(results)} 条")
+            from concurrent.futures import TimeoutError as FutureTimeout
+            
+            try:
+                completed_iter = as_completed(future_to_task, timeout=self.timeout * 2)
+                for future in completed_iter:
+                    task_type, param1, _ = future_to_task[future]
+                    try:
+                        results = future.result()
+                        if results:
+                            for item in results:
+                                if item.title and self._should_include(item, exclude_keywords):
+                                    all_news.append(item)
+                            logger.info(f"  ✓ {task_type}: +{len(results)} 条")
+                            
+                            # 更新健康监控
+                            if self._health_checker:
+                                self._health_checker.inc_fetched(len(results))
+                    except Exception as e:
+                        logger.debug(f"  ✗ {task_type}: {str(e)[:50]}")
                         
                         # 更新健康监控
                         if self._health_checker:
-                            self._health_checker.inc_fetched(len(results))
-                except Exception as e:
-                    logger.debug(f"  ✗ {task_type}: {str(e)[:50]}")
-                    
-                    # 更新健康监控
-                    if self._health_checker:
-                        self._health_checker.inc_fetch_failure(1)
+                            self._health_checker.inc_fetch_failure(1)
+            except FutureTimeout:
+                # 部分源超时：接受已完成的 partial 结果，不让整个抓取失败
+                logger.warning(f"部分源抓取超时（{len(all_news)} 条已完成），继续使用已获取的新闻")
+                for future in future_to_task:
+                    if future.done():
+                        task_type, param1, _ = future_to_task[future]
+                        try:
+                            results = future.result()
+                            if results:
+                                for item in results:
+                                    if item.title and self._should_include(item, exclude_keywords):
+                                        all_news.append(item)
+                        except Exception:
+                            pass
         
         all_news = self._deduplicate(all_news)
         all_news = self._filter_by_date(all_news, days=7)
@@ -266,7 +284,18 @@ class NewsFetcher:
     
     def _fetch_rss(self, name: str, url: str) -> List[NewsItem]:
         import feedparser
-        feed = feedparser.parse(url)
+        import requests
+        # 用带超时的 requests 获取内容，避免 feedparser.parse(url) 无限挂起
+        try:
+            headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
+            resp = requests.get(url, headers=headers, timeout=self.timeout)
+            if resp.status_code != 200:
+                logger.debug(f"RSS fetch failed {name}: HTTP {resp.status_code}")
+                return []
+            feed = feedparser.parse(resp.content)
+        except Exception as e:
+            logger.debug(f"RSS fetch error {name}: {e}")
+            return []
         results = []
         for entry in feed.entries[:3]:
             title = entry.get("title", "")

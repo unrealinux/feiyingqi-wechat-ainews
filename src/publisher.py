@@ -6,11 +6,11 @@ WeChat Publisher - 微信公众号发布模块
 """
 
 import os
-import re
 import json
+import re
+import logging
 import time
 import requests
-import logging
 from datetime import datetime
 from pathlib import Path
 from typing import Optional, List
@@ -89,7 +89,6 @@ class WeChatPublisher:
         
         @with_retry(max_retries=2, delay=1.0)
         def _fetch_token():
-            # 使用代理
             proxies = self.proxies if self.use_proxy else {}
             
             response = requests.get(url, params=params, timeout=10, proxies=proxies)
@@ -120,13 +119,56 @@ class WeChatPublisher:
             logger.error(f"获取 access_token 异常: {e}")
             return None
     
+    def _clean_emoji(self, text: str) -> str:
+        """移除emoji和特殊Unicode字符，避免微信API编码问题"""
+        import re
+        # 简单可靠方法：只保留安全字符
+        safe = []
+        for c in text:
+            code = ord(c)
+            # 保留ASCII打印字符(32-126)
+            if 32 <= code <= 126:
+                safe.append(c)
+            # 保留中文字符(0x4e00-0x9fff)
+            elif 0x4e00 <= code <= 0x9fff:
+                safe.append(c)
+            # 保留换行回车
+            elif code in (10, 13):
+                safe.append(c)
+            # 保留基本标点
+            elif c in '，。！？、；：「」『』…—"\'()[]{}，.! ':
+                safe.append(c)
+            # 其他字符（emoji等）用空格替换
+            else:
+                if not safe or safe[-1] != ' ':
+                    safe.append(' ')
+        
+        result = ''.join(safe)
+        # 清理多余空格
+        return re.sub(r' +', ' ', result).strip()
+    
     def create_draft(self, title: str, content: str, author: str = "", 
-                    digest: str = "", cover_path: str = "") -> Optional[str]:
-        """创建草稿（带代理支持和重试）"""
+                    digest: str = "", cover_path: str = "",
+                    cover_media_id: str = "") -> Optional[str]:
+        """创建草稿（带代理支持和重试）
+        
+        Args:
+            cover_media_id: 预上传的封面media_id（优先于cover_path）
+        """
         token = self.get_access_token()
         if not token:
             logger.error("Failed to get access token")
             return None
+        
+        # 清理emoji和特殊字符，避免微信API编码问题
+        title = self._clean_emoji(title)
+        content = self._clean_emoji(content)
+        
+        # 移除表格图片标记（不应该出现在最终内容中）
+        content = content.replace('@table_image@', '').strip()
+        # 清理可能产生的多余空行
+        import re
+        content = re.sub(r'\n{3,}', '\n\n', content)
         
         # 记录标题和作者长度，用于调试
         final_author = author or self.author
@@ -137,212 +179,404 @@ class WeChatPublisher:
             "title": title,
             "author": final_author,
             "content": content,
-            "digest": digest or self.default_digest,
+            "digest": self._clean_emoji(digest or self.default_digest),
             "content_source_url": "",
             "need_open_comment": 0,
             "only_fans_can_comment": 0
         }
         
-        # 处理封面图
-        if cover_path and os.path.exists(cover_path):
-            media_id = self._upload_media(cover_path, "image")
-            if media_id:
-                article["thumb_media_id"] = media_id
-        
-        # 如果没有有效的thumb_media_id，使用默认封面
-        if "thumb_media_id" not in article:
-            default_cover_path = self.default_cover
-            if default_cover_path and os.path.exists(default_cover_path):
-                media_id = self._upload_media(default_cover_path, "image")
+        # 处理封面图（可选，失败不阻断）
+        thumb_media_id = None
+        if cover_media_id:
+            thumb_media_id = cover_media_id
+            logger.info(f"使用预上传封面: {cover_media_id}")
+        elif cover_path and os.path.exists(cover_path):
+            try:
+                media_id = self._upload_media(cover_path, "image")
                 if media_id:
-                    article["thumb_media_id"] = media_id
+                    thumb_media_id = media_id
+                    logger.info(f"封面图已上传: {media_id}")
+                else:
+                    logger.warning("封面图上传失败，将使用默认封面")
+            except Exception as e:
+                logger.warning(f"封面图上传异常: {e}，将使用默认封面")
         
-        # 如果仍然没有thumb_media_id，尝试使用cover.png
-        if "thumb_media_id" not in article:
-            if os.path.exists("cover.png"):
-                media_id = self._upload_media("cover.png", "image")
-                if media_id:
-                    article["thumb_media_id"] = media_id
+        # 如果没有封面图，尝试上传一个默认封面（1x1像素PNG）
+        if not thumb_media_id:
+            try:
+                import io
+                from PIL import Image
+                img = Image.new('RGB', (900, 500), color='#4a90d9')
+                img_io = io.BytesIO()
+                img.save(img_io, 'PNG')
+                img_io.seek(0)
+                
+                # 临时保存并上传
+                import tempfile
+                with tempfile.NamedTemporaryFile(suffix='.png', delete=False) as tmp:
+                    tmp.write(img_io.getvalue())
+                    tmp_path = tmp.name
+                
+                default_media_id = self._upload_media(tmp_path, "image")
+                os.unlink(tmp_path)  # 删除临时文件
+                
+                if default_media_id:
+                    thumb_media_id = default_media_id
+                    logger.info(f"默认封面已上传: {default_media_id}")
+                else:
+                    logger.error("无法上传默认封面，草稿创建可能失败")
+            except ImportError:
+                logger.warning("未安装Pillow，无法生成默认封面")
+            except Exception as e:
+                logger.error(f"生成默认封面失败: {e}")
+        
+        # 设置封面图（如果有）
+        if thumb_media_id:
+            article["thumb_media_id"] = thumb_media_id
+            article["thumb_media"] = thumb_media_id
         
         url = "https://api.weixin.qq.com/cgi-bin/draft/add"
         params = {"access_token": token}
-        data = {"articles": [article]}
         
-        @with_retry(max_retries=2, delay=1.0)
+        @with_retry(max_retries=2, delay=2.0)
         def _create_draft():
-            # 使用代理
             proxies = self.proxies if self.use_proxy else {}
             
-            response = requests.post(url, params=params, json=data, timeout=30, proxies=proxies)
-            result = response.json()
+            # 确保内容是UTF-8编码的字符串
+            import json
+            article_json = json.dumps({"articles": [article]}, ensure_ascii=False).encode('utf-8')
             
-            # 添加调试日志
-            logger.info(f"WeChat API response: {result}")
-            
-            # 检查是否有错误码
-            if "errcode" in result:
-                errcode = result.get("errcode")
-                if errcode == 0:
-                    return result.get("media_id")
-                else:
-                    error_msg = result.get("errmsg", "Unknown error")
-                    raise AppError(
-                        f"创建草稿失败: {error_msg}",
-                        error_type=ErrorType.SYSTEM,
-                        context={"error_code": errcode, "title": title}
-                    )
-            # 如果没有错误码，但有media_id，说明创建成功
-            elif "media_id" in result:
-                return result.get("media_id")
-            else:
+            # 手动发送请求，确保正确的编码
+            headers = {'Content-Type': 'application/json; charset=utf-8'}
+            response = requests.post(
+                url, params=params, data=article_json, 
+                headers=headers, timeout=30, proxies=proxies
+            )
+            data = response.json()
+            # 微信草稿箱接口：成功时返回 {"media_id": "xxx"}，失败时返回{"errcode": xxx, "errmsg": "xxx"}
+            if "media_id" in data:
+                return data.get("media_id")
+            elif data.get("errcode", 0) != 0:
+                error_msg = data.get("errmsg", "Unknown error")
+                error_code = data.get("errcode", -1)
                 raise AppError(
-                    f"创建草稿失败: Unknown error",
+                    f"创建草稿失败: {error_msg}",
                     error_type=ErrorType.SYSTEM,
-                    context={"title": title}
+                    context={"error_code": error_code}
+                )
+            else:
+                # 未知响应格式
+                raise AppError(
+                    f"创建草稿返回未知格式: {data}",
+                    error_type=ErrorType.SYSTEM
+                )
+            data = response.json()
+            # 微信草稿箱接口：成功时返回 {"media_id": "xxx"}，失败时返回 {"errcode": xxx, "errmsg": "xxx"}
+            if "media_id" in data:
+                return data.get("media_id")
+            elif data.get("errcode", 0) != 0:
+                error_msg = data.get("errmsg", "Unknown error")
+                error_code = data.get("errcode", -1)
+                raise AppError(
+                    f"创建草稿失败: {error_msg}",
+                    error_type=ErrorType.SYSTEM,
+                    context={"error_code": error_code}
+                )
+            else:
+                # 未知响应格式
+                raise AppError(
+                    f"创建草稿返回未知格式: {data}",
+                    error_type=ErrorType.SYSTEM
                 )
         
         try:
             media_id = _create_draft()
-            logger.info(f"Draft created: {media_id}")
-            
-            # 更新健康监控
-            if self._health_checker:
-                self._health_checker.inc_published(1)
-            
-            return media_id
+            if media_id:
+                logger.info(f"Draft created: {media_id}")
+                if self._health_checker:
+                    self._health_checker.inc_published()
+                return media_id
+            else:
+                if self._health_checker:
+                    self._health_checker.inc_publish_failure()
+                return None
         except AppError as e:
             logger.error(f"创建草稿失败: {e}")
-            
-            # 更新健康监控
             if self._health_checker:
-                self._health_checker.inc_publish_failure(1)
-            
+                self._health_checker.inc_publish_failure()
             return None
         except Exception as e:
             logger.error(f"创建草稿异常: {e}")
-            
-            # 更新健康监控
             if self._health_checker:
-                self._health_checker.inc_publish_failure(1)
-            
+                self._health_checker.inc_publish_failure()
             return None
     
-    def publish_draft(self, media_id: str) -> Optional[str]:
-        """发布草稿（带代理支持和重试）"""
+    def update_draft_cover(self, media_id: str, thumb_media_id: str) -> bool:
+        """更新草稿封面图"""
         token = self.get_access_token()
         if not token:
-            return None
-        
-        url = "https://api.weixin.qq.com/cgi-bin/freepublish"
+            return False
+        url = "https://api.weixin.qq.com/cgi-bin/draft/update"
         params = {"access_token": token}
-        data = {"media_id": media_id, "publish_id": 0}
-        
-        @with_retry(max_retries=2, delay=1.0)
-        def _publish_draft():
-            # 使用代理
-            proxies = self.proxies if self.use_proxy else {}
-            
-            response = requests.post(url, params=params, json=data, timeout=30, proxies=proxies)
-            result = response.json()
-            
-            if result.get("errcode") == 0:
-                return result.get("publish_id")
-            else:
-                error_msg = result.get("errmsg", "Unknown error")
-                error_code = result.get("errcode", -1)
-                raise AppError(
-                    f"发布草稿失败: {error_msg}",
-                    error_type=ErrorType.SYSTEM,
-                    context={"error_code": error_code, "media_id": media_id}
-                )
-        
+        payload = {
+            "media_id": media_id,
+            "index": 0,
+            "articles": {
+                "thumb_media_id": thumb_media_id,
+            }
+        }
         try:
-            publish_id = _publish_draft()
-            logger.info(f"Published: {publish_id}")
-            
-            # 更新健康监控
-            if self._health_checker:
-                self._health_checker.inc_published(1)
-            
-            return str(publish_id)
-        except AppError as e:
-            logger.error(f"发布草稿失败: {e}")
-            
-            # 更新健康监控
-            if self._health_checker:
-                self._health_checker.inc_publish_failure(1)
-            
-            return None
+            proxies = self.proxies if self.use_proxy else {}
+            resp = requests.post(url, params=params, json=payload,
+                               timeout=15, proxies=proxies)
+            data = resp.json()
+            if data.get("errcode", -1) == 0:
+                logger.info(f"Draft cover updated: {media_id}")
+                return True
+            else:
+                logger.error(f"Update draft cover failed: {data}")
+                return False
         except Exception as e:
-            logger.error(f"发布草稿异常: {e}")
-            
-            # 更新健康监控
-            if self._health_checker:
-                self._health_checker.inc_publish_failure(1)
-            
-            return None
-    
+            logger.error(f"Error updating draft cover: {e}")
+            return False
+
     def _upload_media(self, file_path: str, media_type: str = "image") -> Optional[str]:
-        """上传素材（带代理支持）"""
+        """上传媒体文件到永久素材（带重试）"""
         token = self.get_access_token()
         if not token:
             return None
         
-        url = "https://api.weixin.qq.com/cgi-bin/material/add_material"
+        # 微信草稿箱需要永久素材的media_id，使用material/add_material接口
+        url = f"https://api.weixin.qq.com/cgi-bin/material/add_material"
         params = {"access_token": token, "type": media_type}
         
-        try:
-            # 使用代理
+        @with_retry(max_retries=2, delay=1.0)
+        def _upload():
             proxies = self.proxies if self.use_proxy else {}
-            
-            with open(file_path, "rb") as f:
-                files = {"media": f}
-                response = requests.post(url, params=params, files=files, timeout=60, proxies=proxies)
-                result = response.json()
-                
-                # 检查是否有错误码
-                if "errcode" in result:
-                    errcode = result.get("errcode")
-                    if errcode == 0:
-                        return result.get("media_id")
-                    else:
-                        logger.error(f"Failed to upload media: {result}")
-                        return None
-                # 如果没有错误码，但有media_id，说明上传成功
-                elif "media_id" in result:
-                    return result.get("media_id")
-                else:
-                    logger.error(f"Failed to upload media: {result}")
-                    return None
+            with open(file_path, 'rb') as f:
+                files = {'media': f}
+                response = requests.post(url, params=params, files=files, 
+                                 timeout=30, proxies=proxies)
+            data = response.json()
+            if "media_id" in data:
+                logger.info(f"永久素材上传成功: {data['media_id']}")
+                return data["media_id"]
+            else:
+                error_msg = data.get("errmsg", "Unknown error")
+                raise AppError(f"上传永久素材失败: {error_msg}")
+        
+        try:
+            return _upload()
         except Exception as e:
             logger.error(f"Error uploading media: {e}")
             return None
     
+    def _upload_article_image(self, file_path: str) -> Optional[str]:
+        """上传文章配图，返回可嵌入内容的URL"""
+        token = self.get_access_token()
+        if not token:
+            return None
+        
+        url = "https://api.weixin.qq.com/cgi-bin/media/uploadimg"
+        params = {"access_token": token}
+        
+        @with_retry(max_retries=2, delay=1.0)
+        def _upload():
+            proxies = self.proxies if self.use_proxy else {}
+            with open(file_path, 'rb') as f:
+                files = {'media': f}
+                response = requests.post(url, params=params, files=files,
+                                 timeout=60, proxies=proxies)
+            data = response.json()
+            if "url" in data:
+                return data["url"]
+            else:
+                error_msg = data.get("errmsg", "Unknown error")
+                raise AppError(f"上传文章图片失败: {error_msg}")
+        
+        try:
+            return _upload()
+        except Exception as e:
+            logger.error(f"Error uploading article image: {e}")
+            return None
+
     def markdown_to_html(self, markdown_text: str) -> str:
-        """Markdown 转 HTML（微信公众号兼容）"""
+        """Markdown 转 HTML（微信公众号兼容，增强排版）"""
         html = markdown_text
         
-        html = re.sub(r'^### (.*?)$', r'<h3 style="font-size: 18px; color: #333; margin: 20px 0 10px;">\1</h3>', html, flags=re.MULTILINE)
-        html = re.sub(r'^## (.*?)$', r'<h2 style="font-size: 20px; color: #1a73e8; margin: 25px 0 15px; border-left: 4px solid #1a73e8; padding-left: 12px;">\1</h2>', html, flags=re.MULTILINE)
-        html = re.sub(r'^# (.*?)$', r'<h1 style="font-size: 24px; color: #333; margin: 30px 0 20px; text-align: center;">\1</h1>', html, flags=re.MULTILINE)
+        # ===== 处理特殊元素：提示框 =====
+        def convert_info_boxes(html_text):
+            patterns = {
+                r':::info\s*\n(.*?):::': r'<div style="background: #e8f4fd; border-left: 4px solid #3498db; padding: 15px 20px; margin: 20px 0; border-radius: 0 8px 8px 0; line-height: 1.8;"><div style="font-weight: 600; color: #3498db; margin-bottom: 8px;">💡 提示</div>\1</div>',
+                r':::warning\s*\n(.*?):::': r'<div style="background: #fff3cd; border-left: 4px solid #f39c12; padding: 15px 20px; margin: 20px 0; border-radius: 0 8px 8px 0; line-height: 1.8;"><div style="font-weight: 600; color: #f39c12; margin-bottom: 8px;">⚠️ 注意</div>\1</div>',
+                r':::tip\s*\n(.*?):::': r'<div style="background: #d4edda; border-left: 4px solid #28a745; padding: 15px 20px; margin: 20px 0; border-radius: 0 8px 8px 0; line-height: 1.8;"><div style="font-weight: 600; color: #28a745; margin-bottom: 8px;">💎 技巧</div>\1</div>',
+                r':::success\s*\n(.*?):::': r'<div style="background: #d1ecf1; border-left: 4px solid #17a2b8; padding: 15px 20px; margin: 20px 0; border-radius: 0 8px 8px 0; line-height: 1.8;"><div style="font-weight: 600; color: #17a2b8; margin-bottom: 8px;">✅ 成功</div>\1</div>'
+            }
+            for pattern, replacement in patterns.items():
+                html_text = re.sub(pattern, replacement, html_text, flags=re.DOTALL)
+            return html_text
         
-        html = re.sub(r'\*\*(.*?)\*\*', r'<strong style="font-weight: bold;">\1</strong>', html)
-        html = re.sub(r'\*(.*?)\*', r'<em>\1</em>', html)
+        html = convert_info_boxes(html)
         
-        html = re.sub(r'\[(.*?)\]\((.*?)\)', r'<a href="\2" style="color: #1a73e8; text-decoration: underline;">\1</a>', html)
+        # ===== 处理评分星级 =====
+        html = re.sub(r'\[rating:\s*([\d.]+)\]', 
+                      lambda m: f'<span style="color: #f39c12;">{"★" * int(float(m.group(1))) + "☆" * (5 - int(float(m.group(1))))}</span>', 
+                      html)
+        html = re.sub(r'\[评分:\s*([★☆]+)\]', r'<span style="color: #f39c12;">\1</span>', html)
         
-        html = re.sub(r'^> (.*?)$', r'<blockquote style="border-left: 3px solid #ddd; padding-left: 15px; margin: 15px 0; color: #666; font-style: italic;">\1</blockquote>', html, flags=re.MULTILINE)
+        # ===== 标题样式（更好的视觉层次）=====
+        # h3: 小标题
+        html = re.sub(r'^### (.*?)$', 
+                      r'<h3 style="font-size: 18px; color: #2c3e50; margin: 28px 0 18px; font-weight: 600; line-height: 1.6; display: flex; align-items: center;"><span style="background: #3498db; color: #fff; padding: 2px 8px; border-radius: 4px; font-size: 14px; margin-right: 10px;">→</span>\1</h3>', 
+                      html, flags=re.MULTILINE)
         
-        html = re.sub(r'^---$', r'<hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;">', html, flags=re.MULTILINE)
+        # h2: 中标题 - 带渐变左边框和背景
+        html = re.sub(r'^## (.*?)$', 
+                      r'<h2 style="font-size: 22px; color: #2c3e50; margin: 40px 0 22px; padding: 12px 18px; border-left: 5px solid #3498db; background: linear-gradient(to right, #ebf5fb, transparent); line-height: 1.6; border-radius: 0 8px 8px 0;">\1</h2>', 
+                      html, flags=re.MULTILINE)
         
-        html = re.sub(r'\n\n', r'</p><p style="margin: 15px 0; line-height: 1.8;">', html)
-        html = '<p style="margin: 15px 0; line-height: 1.8;">' + html + '</p>'
+        # h1: 大标题 - 居中显示
+        html = re.sub(r'^# (.*?)$', 
+                      r'<h1 style="font-size: 26px; color: #1a1a1a; margin: 45px 0 30px; text-align: center; font-weight: 700; line-height: 1.4; padding-bottom: 15px; border-bottom: 3px solid #3498db;">\1</h1>', 
+                      html, flags=re.MULTILINE)
         
-        html = re.sub(r'<p style="margin: 15px 0; line-height: 1.8;"></p>', r'', html)
-        html = re.sub(r'<p style="margin: 15px 0; line-height: 1.8;">(<h[123])', r'\1', html)
-        html = re.sub(r'(</h[123]>)</p>', r'\1', html)
-        html = re.sub(r'<p style="margin: 15px 0; line-height: 1.8;">(<hr)', r'\1', html)
-        html = re.sub(r'(</hr>)</p>', r'\1', html)
+        # ===== 加粗和斜体 =====
+        html = re.sub(r'\*\*(.*?)\*\*', r'<strong style="font-weight: 600; color: #2c3e50;">\1</strong>', html)
+        html = re.sub(r'\*(.*?)\*', r'<em style="color: #7f8c8d; font-style: italic;">\1</em>', html)
+        
+        # ===== 链接（微信友好的样式）=====
+        html = re.sub(r'\[(.*?)\]\((.*?)\)', 
+                      r'<a href="\2" style="color: #3498db; text-decoration: none; border-bottom: 2px solid #3498db; padding-bottom: 2px;">\1</a>', 
+                      html)
+        
+        # ===== 引用块（更美观的样式）=====
+        html = re.sub(r'^> (.*?)$', 
+                      r'<blockquote style="background: #f8f9fa; border-left: 4px solid #3498db; padding: 18px 22px; margin: 25px 0; color: #555; font-style: normal; line-height: 1.9; border-radius: 0 10px 10px 0; box-shadow: 0 2px 8px rgba(0,0,0,0.05);">\1</blockquote>', 
+                      html, flags=re.MULTILINE)
+        
+        # ===== 分隔线（更精致的样式）=====
+        html = re.sub(r'^---$', 
+                      r'<hr style="border: none; height: 2px; background: linear-gradient(to right, transparent, #3498db, transparent); margin: 45px 0;">', 
+                      html, flags=re.MULTILINE)
+        
+        # ===== 列表项（更好的样式）=====
+        # 无序列表
+        html = re.sub(r'^[-*] (.*?)$', 
+                      r'<div style="margin: 10px 0; padding-left: 28px; position: relative; line-height: 1.8;"><span style="position: absolute; left: 0; color: #3498db; font-size: 18px;">•</span>\1</div>', 
+                      html, flags=re.MULTILINE)
+        
+        # 有序列表 (数字)
+        html = re.sub(r'^(\d+)\. (.*?)$', 
+                      r'<div style="margin: 10px 0; padding-left: 28px; position: relative; line-height: 1.8;"><span style="position: absolute; left: 0; background: #3498db; color: #fff; width: 20px; height: 20px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 600;">\1</span>\2</div>', 
+                      html, flags=re.MULTILINE)
+        
+        # ===== 表格处理：极简版 - 微信兼容 =====
+        def convert_tables(html_text):
+            lines = html_text.split('\n')
+            result = []
+            table_rows = []
+            in_table = False
+            
+            for line in lines:
+                stripped = line.strip()
+                
+                # 检测表格行
+                if stripped.startswith('|') and stripped.endswith('|') and stripped.count('|') >= 3:
+                    table_rows.append(stripped)
+                    in_table = True
+                else:
+                    if in_table and table_rows:
+                        # 处理表格
+                        if len(table_rows) >= 2:
+                            table_html = build_html_table(table_rows)
+                            result.append(table_html)
+                        else:
+                            result.append('\n'.join(table_rows))
+                        table_rows = []
+                        in_table = False
+                    result.append(line)
+            
+            # 处理末尾的表格
+            if table_rows:
+                if len(table_rows) >= 2:
+                    table_html = build_html_table(table_rows)
+                    result.append(table_html)
+                else:
+                    result.append('\n'.join(table_rows))
+            
+            return '\n'.join(result)
+        
+        def build_html_table(rows):
+            if len(rows) < 2:
+                return '\n'.join(rows)
+            
+            # 解析表头（第一行）
+            first_row = rows[0].strip()
+            if not (first_row.startswith('|') and first_row.endswith('|')):
+                return '\n'.join(rows)
+            
+            headers = [c.strip() for c in first_row.split('|')[1:-1]]
+            col_count = len(headers)
+            
+            if col_count == 0:
+                return '\n'.join(rows)
+            
+            # 生成HTML表格 - 极简版，微信兼容
+            html = ['<table style="width:100%;border-collapse:collapse;border:1px solid #4a90d9;font-size:14px;">']
+            html.append('<thead style="background:#4a90d9;color:#fff;">')
+            html.append('<tr>')
+            for h in headers:
+                html.append(f'<th style="padding:10px 8px;text-align:center;font-weight:600;border:1px solid #ddd;">{h}</th>')
+            html.append('</tr>')
+            html.append('</thead>')
+            html.append('<tbody>')
+            
+            # 数据行（从第二行开始，跳过分隔线）
+            for row_idx, row in enumerate(rows[1:], 1):
+                stripped = row.strip()
+                if not (stripped.startswith('|') and stripped.endswith('|')):
+                    continue
+                # 跳过分隔线
+                content = stripped.replace('|', ' ').strip()
+                is_sep = False
+                if content:
+                    clean = content.replace('-', '').replace(':', '').replace(' ', '')
+                    if clean == '' and len(content) >= 2:
+                        is_sep = True
+                if is_sep:
+                    continue
+                
+                cells = [c.strip() for c in stripped.split('|')[1:-1]]
+                if len(cells) != col_count:
+                    continue
+                
+                bg = '#f9f9f9' if row_idx % 2 == 0 else '#fff'
+                html.append(f'<tr style="background:{bg};">')
+                for cell in cells:
+                    html.append(f'<td style="padding:8px 6px;text-align:center;border:1px solid #ddd;font-size:13px;">{cell}</td>')
+                html.append('</tr>')
+            
+            html.append('</tbody>')
+            html.append('</table>')
+            
+            return '\n'.join(html)
+        
+        html = convert_tables(html)
+        
+        # ===== 段落处理 =====
+        html = re.sub(r'\n\n', r'</p><p style="margin: 20px 0; line-height: 2; font-size: 16px; color: #333;">', html)
+        html = '<p style="margin: 20px 0; line-height: 2; font-size: 16px; color: #333;">' + html + '</p>'
+        
+        # ===== 清理空段落 =====
+        html = re.sub(r'<p style="[^"]*"></p>', r'', html)
+        html = re.sub(r'<p style="[^"]*">(\s*<h[123])', r'\1', html)
+        html = re.sub(r'(</h[123]>)\s*</p>', r'\1', html)
+        html = re.sub(r'<p style="[^"]*">(\s*<hr)', r'\1', html)
+        html = re.sub(r'(</hr>)\s*</p>', r'\1', html)
+        html = re.sub(r'<p style="[^"]*">(\s*<blockquote)', r'\1', html)
+        html = re.sub(r'(</blockquote>)\s*</p>', r'\1', html)
+        html = re.sub(r'<p style="[^"]*">(\s*<div)', r'\1', html)
+        html = re.sub(r'(</div>)\s*</p>', r'\1', html)
         
         return html
     
@@ -363,7 +597,7 @@ class WeChatPublisher:
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{title}</title>
     <style>
-        body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; max-width: 677px; margin: 0 auto; padding: 20px; color: #333; }}
+        body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Helvetica Neue", Arial, sans-serif; max-width: 677px; margin: 0 auto; padding: 20px; color: #333; background-color: #f5f7fa; }}
         h1, h2, h3 {{ margin: 20px 0; }}
         p {{ line-height: 1.8; margin: 15px 0; }}
         a {{ color: #1a73e8; }}
@@ -372,7 +606,9 @@ class WeChatPublisher:
     </style>
 </head>
 <body>
+<div style="background: #fff; border-radius: 12px; padding: 25px 30px; box-shadow: 0 2px 15px rgba(0,0,0,0.08); margin: 20px 0;">
 {html_content}
+</div>
 </body>
 </html>"""
         
@@ -381,6 +617,85 @@ class WeChatPublisher:
         
         logger.info(f"HTML exported: {filename}")
         return filename
+    
+    def list_drafts(self, offset: int = 0, count: int = 20) -> list:
+        """获取草稿列表，返回 [(title, media_id), ...]"""
+        token = self.get_access_token()
+        if not token:
+            return []
+        url = "https://api.weixin.qq.com/cgi-bin/draft/batchget"
+        params = {"access_token": token}
+        try:
+            proxies = self.proxies if self.use_proxy else {}
+            response = requests.post(
+                url, params=params,
+                json={"offset": offset, "count": count, "no_content": 0},
+                timeout=30, proxies=proxies
+            )
+            data = response.json()
+            items = data.get("item", [])
+            result = []
+            for it in items:
+                m = it.get("media_id", "")
+                c = it.get("content", {})
+                t = c.get("title", "(无标题)")
+                result.append((t, m))
+            return result
+        except Exception as e:
+            logger.error(f"列举草稿失败: {e}")
+            return []
+
+    def delete_draft(self, media_id: str) -> bool:
+        """删除指定草稿"""
+        token = self.get_access_token()
+        if not token or not media_id:
+            return False
+        url = "https://api.weixin.qq.com/cgi-bin/draft/delete"
+        params = {"access_token": token}
+        try:
+            proxies = self.proxies if self.use_proxy else {}
+            response = requests.post(
+                url, params=params,
+                json={"media_id": media_id},
+                timeout=30, proxies=proxies
+            )
+            data = response.json()
+            if data.get("errcode", 0) == 0:
+                return True
+            logger.error(f"删除草稿失败: {data.get('errmsg')}")
+            return False
+        except Exception as e:
+            logger.error(f"删除草稿异常: {e}")
+            return False
+
+    def publish_draft(self, media_id: str) -> Optional[str]:
+        """发布草稿"""
+        token = self.get_access_token()
+        if not token:
+            return None
+        
+        url = "https://api.weixin.qq.com/cgi-bin/draft/publish"
+        params = {"access_token": token}
+        
+        @with_retry(max_retries=2, delay=2.0)
+        def _publish():
+            proxies = self.proxies if self.use_proxy else {}
+            response = requests.post(
+                url, params=params, json={"media_id": media_id}, 
+                timeout=30, proxies=proxies
+            )
+            data = response.json()
+            if data.get("errcode", 0) == 0:
+                return data.get("publish_id")
+            else:
+                error_msg = data.get("errmsg", "Unknown error")
+                raise AppError(f"发布失败: {error_msg}")
+        
+        try:
+            return _publish()
+        except Exception as e:
+            logger.error(f"发布异常: {e}")
+            return None
 
 
 def publish_article(title: str, content: str, author: str = "", 
@@ -424,28 +739,3 @@ def publish_article(title: str, content: str, author: str = "",
     logger.info(f"Draft created: {media_id}")
     logger.info("Login to mp.weixin.qq.com to publish")
     return True
-
-
-if __name__ == "__main__":
-    test_content = """# 🎯 2024 年 1 月 24 日 AI 资讯日报
-
-## 大模型进展
-
-**OpenAI 发布最新 GPT-5 模型**
-> OpenAI 宣布推出 GPT-5，新模型在推理能力和多模态理解方面有显著突破
-
-[原文链接](https://openai.com)
-
----
-
-## 今日点评
-
-AI 领域正在经历快速发展期。
-"""
-    
-    result = publish_article(
-        title="2024 年 1 月 24 日 AI 资讯日报",
-        content=test_content,
-        auto_publish=False
-    )
-    print(f"Result: {result}")

@@ -106,7 +106,8 @@ class CoverGenerator:
         text_wrap_width: int = 30,
         gradient_text: bool = False,
         use_cache: bool = True,
-        add_vignette: bool = True
+        add_vignette: bool = True,
+        use_realistic_photo: bool = True  # 新增：使用写实照片背景
     ) -> str:
         """生成封面图 (优化版，参考FeiqingqiWechatMP)
         
@@ -138,6 +139,47 @@ class CoverGenerator:
                         f.write(cached_data)
                     logger.info(f"使用缓存封面图: {output_path}")
                     return output_path
+            
+            # 优先使用真实照片背景（方案A）
+            if use_realistic_photo:
+                photo_bg = self._select_realistic_photo(title)
+                if photo_bg and os.path.exists(photo_bg):
+                    logger.info(f"使用真实照片背景: {photo_bg}")
+                    return self._create_photo_cover(title, photo_bg, output_path)
+            
+            # 如果没有真实照片，尝试baoyu-imagine生成
+            try:
+                import subprocess
+                script_path = "C:/Users/Administrator/.config/opencode/skills/baoyu-skills/skills/baoyu-imagine/scripts/main.ts"
+                prompt = self._build_baoyu_prompt(title)
+                
+                cmd = [
+                    "bun", script_path,
+                    "--prompt", prompt,
+                    "--image", output_path,
+                    "--provider", "dashscope",
+                    "--ar", "16:9"
+                ]
+                
+                result = subprocess.run(
+                    cmd,
+                    cwd="E:/Project/feiyingqi-wechat-ainews",
+                    capture_output=True,
+                    text=True,
+                    timeout=120,
+                    env={**os.environ, "DASHSCOPE_API_KEY": "sk-092377b24cf842dc991142ae908e5ecb"}
+                )
+                
+                if result.returncode == 0 and os.path.exists(output_path):
+                    logger.info(f"baoyu封面生成成功: {output_path}")
+                    return output_path
+                else:
+                    logger.warning(f"baoyu封面生成失败，使用本地生成...")
+            except Exception as e:
+                logger.warning(f"baoyu调用失败: {e}，使用本地生成...")
+            
+            # 最后使用本地生成
+            logger.info("使用本地生成封面...")
             
             # 选择颜色方案
             color_scheme = random.choice(self.color_schemes)
@@ -781,12 +823,241 @@ def generate_cover_image(
     style: str = "auto",
     **kwargs
 ) -> str:
-    """生成封面图"""
+    """生成封面图 - 优先使用baoyu-imagine生成写实AI行业封面"""
+    
+    # 优先使用baoyu-imagine生成写实封面
+    try:
+        import os
+        import subprocess
+        
+        # baoyu-imagine脚本路径
+        script_path = "C:/Users/Administrator/.config/opencode/skills/baoyu-skills/skills/baoyu-imagine/scripts/main.ts"
+        
+        # 根据标题构建专业提示词
+        prompt = _build_baoyu_prompt(title)
+        
+        # 确保输出目录存在
+        os.makedirs(os.path.dirname(output_path), exist_ok=True)
+        
+        # 使用bun运行baoyu-imagine
+        cmd = [
+            "bun", script_path,
+            "--prompt", prompt,
+            "--image", output_path,
+            "--provider", "dashscope",
+            "--ar", "16:9"
+        ]
+        
+        result = subprocess.run(
+            cmd,
+            cwd="E:/Project/feiyingqi-wechat-ainews",
+            capture_output=True,
+            text=True,
+            timeout=120,
+            env={**os.environ, "DASHSCOPE_API_KEY": "sk-092377b24cf842dc991142ae908e5ecb"}
+        )
+        
+        if result.returncode == 0 and os.path.exists(output_path):
+            logger.info(f"baoyu封面生成成功: {output_path}")
+            return output_path
+        else:
+            logger.warning(f"baoyu封面生成失败: {result.stderr}")
+            
+    except Exception as e:
+        logger.warning(f"baoyu封面生成异常: {e}")
+    
+    # 失败则使用本地生成
+    logger.info("使用本地生成封面...")
     generator = CoverGenerator()
     return generator.generate_cover(title, output_path, style, **kwargs)
 
 
-def generate_smart_cover(
+def _build_baoyu_prompt(title: str) -> str:
+    """根据标题构建专业的baoyu-imagine提示词 - 写实照片风格"""
+    # 明确要求写实照片风格
+    base = "Professional photography, RAW photo, DSLR camera, "
+    
+    # 根据文章类型添加特定写实元素
+    if "笔记" in title or "note" in title.lower():
+        elements = "realistic modern workspace with actual paper notebooks, real laptops showing AI software, tablet computers on wooden desk, neural network visualization on monitors in background, natural window lighting, shallow depth of field"
+    elif "搜索" in title or "search" in title.lower():
+        elements = "realistic futuristic control room with large screens showing AI search interface, server racks in background, blue LED lighting, professional photography, cinematic lighting"
+    elif "编程" in title or "code" in title.lower():
+        elements = "realistic programmer's desk with multiple real monitors displaying code with AI autocomplete, mechanical keyboard, coffee cup, dark room with RGB LED strips, bokeh effect"
+    elif "视频" in title or "video" in title.lower():
+        elements = "realistic video editing suite with large high-res monitors showing AI video tools, professional cameras on tripods, studio lighting equipment, wooden floor reflection"
+    elif "音频" in title or "audio" in title.lower():
+        elements = "realistic audio production studio with mixing console, studio monitors, microphones, computer screen showing AI audio waveform, moody purple and blue lighting, shallow depth of field"
+    elif "设计" in title or "design" in title.lower():
+        elements = "realistic modern design studio with iMacs displaying AI graphic tools, drawing tablets, color palettes on wall, plants in corner, natural lighting from large windows"
+    elif "营销" in title or "marketing" in title.lower():
+        elements = "realistic modern marketing office with analytics dashboards on screens, people working on laptops (blurred), whiteboard with AI strategy, bright professional lighting"
+    elif "医疗" in title or "medical" in title.lower():
+        elements = "realistic modern medical office with AI diagnostics interface on computer, stethoscope on desk, medical charts, clean white and blue decor, soft clinical lighting"
+    elif "金融" in title or "finance" in title.lower():
+        elements = "realistic trading floor with multiple monitors showing AI market predictions, stock tickers in background, professional suit jacket (blurred), New York skyline through windows"
+    elif "法律" in title or "legal" in title.lower():
+        elements = "realistic modern law office with leather chairs, law books, computer showing AI legal analysis, mahogany desk, professional warm lighting, wood paneling"
+    elif "会议" in title or "meeting" in title.lower():
+        elements = "realistic smart conference room with large screen showing AI transcription, glass table with laptops, modern office chairs, city skyline through glass wall"
+    elif "图像" in title or "image" in title.lower():
+        elements = "realistic digital art studio with Wacom tablets, dual monitors showing AI art generation, color calibration tools, creative lighting with LED strips"
+    elif "办公" in title or "office" in title.lower():
+        elements = "realistic smart office environment with AI productivity tools on screens, ergonomic furniture, plants, modern decor, bright natural lighting"
+    elif "数据" in title or "data" in title.lower():
+        elements = "realistic data science workspace with multiple monitors showing AI analytics dashboards, whiteboard with neural network diagrams, coffee and notebooks, modern tech office"
+    elif "教育" in title or "education" in title.lower():
+        elements = "realistic modern classroom with interactive whiteboard showing AI tutoring interface, tablets on desks, bright cheerful lighting, educational posters on walls"
+    else:
+        elements = "realistic modern AI workspace with neural network visualizations on screens, multiple monitors, professional tech environment, cinematic lighting"
+    
+    # 强化写实风格关键词
+    style = "photorealistic, ultra-detailed, 8K resolution, professional photography, bokeh, shallow depth of field, natural lighting, no cartoon, no vector, no illustration, no 3D render"
+    
+    return f"{base}{elements}, {style}. 16:9 aspect ratio, high quality, detailed"
+
+
+    def _select_realistic_photo(self, title: str) -> Optional[str]:
+        """根据标题智能选择真实照片背景"""
+        import os
+        
+        # 照片目录
+        photo_dir = "assets/covers"
+        if not os.path.exists(photo_dir):
+            return None
+        
+        # 根据文章类型选择对应照片
+        photo_map = {
+            "笔记": ["workspace", "note", "desk"],
+            "note": ["workspace", "note", "desk"],
+            "搜索": ["search", "tech", "monitor"],
+            "search": ["search", "tech", "monitor"],
+            "编程": ["code", "programming", "developer"],
+            "code": ["code", "programming", "developer"],
+            "视频": ["video", "studio", "camera"],
+            "video": ["video", "studio", "camera"],
+            "音频": ["audio", "music", "studio"],
+            "audio": ["audio", "music", "studio"],
+            "设计": ["design", "creative", "art"],
+            "design": ["design", "creative", "art"],
+            "营销": ["marketing", "business", "office"],
+            "marketing": ["marketing", "business", "office"],
+            "医疗": ["medical", "hospital", "health"],
+            "medical": ["medical", "hospital", "health"],
+            "金融": ["finance", "trading", "business"],
+            "finance": ["finance", "trading", "business"],
+            "法律": ["law", "legal", "office"],
+            "legal": ["law", "legal", "office"],
+            "会议": ["meeting", "conference", "room"],
+            "meeting": ["meeting", "conference", "room"],
+            "图像": ["image", "art", "creative"],
+            "image": ["image", "art", "creative"],
+            "办公": ["office", "workspace", "desk"],
+            "office": ["office", "workspace", "desk"],
+            "数据": ["data", "analytics", "dashboard"],
+            "data": ["data", "analytics", "dashboard"],
+            "教育": ["education", "classroom", "learning"],
+            "education": ["education", "classroom", "learning"],
+        }
+        
+        # 查找匹配的照片
+        import glob
+        photos = glob.glob(os.path.join(photo_dir, "*.jpg")) + \
+                 glob.glob(os.path.join(photo_dir, "*.png")) + \
+                 glob.glob(os.path.join(photo_dir, "*.jpeg"))
+        
+        if not photos:
+            return None
+        
+        # 根据标题关键词匹配
+        title_lower = title.lower()
+        for key, keywords in photo_map.items():
+            if key in title or key in title_lower:
+                for photo in photos:
+                    photo_name = os.path.basename(photo).lower()
+                    if any(kw in photo_name for kw in keywords):
+                        return photo
+        
+        # 如果没有匹配，随机选一张
+        import random
+        return random.choice(photos) if photos else None
+    
+    def _create_photo_cover(self, title: str, photo_path: str, output_path: str) -> str:
+        """使用真实照片创建封面（叠加标题文字）"""
+        if not PIL_AVAILABLE:
+            logger.error("PIL not installed")
+            return ""
+        
+        try:
+            # 打开照片
+            img = Image.open(photo_path).convert('RGB')
+            img = img.resize((self.width, self.height), Image.Resampling.LANCZOS)
+            
+            # 添加半透明渐变叠加层（让文字更清晰）
+            overlay = Image.new('RGBA', (self.width, self.height), (0, 0, 0, 0))
+            draw = ImageDraw.Draw(overlay)
+            
+            # 从底部向上的渐变（黑色半透明）
+            for i in range(self.height // 2):
+                alpha = int(255 * (i / (self.height // 2)) * 0.7)
+                draw.rectangle([(0, self.height - i), (self.width, self.height - i - 1)], 
+                              fill=(0, 0, 0, alpha))
+            
+            # 合并叠加层
+            img = Image.alpha_composite(img.convert('RGBA'), overlay).convert('RGB')
+            draw = ImageDraw.Draw(img)
+            
+            # 绘制标题文字（白色，带阴影）
+            font = self._load_font(40)  # 大号字体
+            if not font:
+                font = ImageFont.load_default()
+            
+            # 文字换行处理
+            max_width = self.width - 100
+            lines = []
+            words = title.split()
+            current_line = []
+            current_width = 0
+            
+            for word in words:
+                word_width = draw.textlength(word + ' ', font=font)
+                if current_width + word_width <= max_width:
+                    current_line.append(word)
+                    current_width += word_width
+                else:
+                    lines.append(' '.join(current_line))
+                    current_line = [word]
+                    current_width = draw.textlength(word + ' ', font=font)
+            
+            if current_line:
+                lines.append(' '.join(current_line))
+            
+            # 绘制文字（从底部向上）
+            line_height = 50
+            total_height = len(lines) * line_height
+            y_start = self.height - total_height - 50
+            
+            for i, line in enumerate(lines[:3]):  # 最多3行
+                x = 50
+                y = y_start + i * line_height
+                
+                # 文字阴影
+                draw.text((x+2, y+2), line, font=font, fill=(0, 0, 0, 128))
+                # 主文字
+                draw.text((x, y), line, font=font, fill=(255, 255, 255))
+            
+            # 保存
+            Path(output_path).parent.mkdir(parents=True, exist_ok=True)
+            img.save(output_path, 'PNG', quality=95)
+            
+            logger.info(f"真实照片封面创建成功: {output_path}")
+            return output_path
+            
+        except Exception as e:
+            logger.error(f"创建照片封面失败: {e}")
+            return ""
+
+def generate_cover_image(
     title: str,
     output_path: str = "output/cover.png",
     ai_api_key: str = "",

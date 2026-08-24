@@ -11,7 +11,7 @@ from datetime import datetime
 from typing import List, Optional
 from pathlib import Path
 
-from src.config import load_config, get_openai_config
+from src.config import load_config, get_openai_config, get_openrouter_config
 from src.fetcher import NewsItem
 
 logging.basicConfig(
@@ -28,26 +28,37 @@ class Summarizer:
     def __init__(self):
         config = load_config()
         openai_config = get_openai_config(config)
+        openrouter_config = get_openrouter_config(config)
         
-        self.api_key = openai_config.get("api_key", "")
-        if not self.api_key or self.api_key == "your_openai_api_key_here":
-            self.api_key = os.environ.get("OPENAI_API_KEY", "")
-        
-        self.model = openai_config.get("model", "gpt-4o-mini")
+        # 优先使用OpenRouter配置
+        if openrouter_config.get("api_key"):
+            self.api_key = openrouter_config.get("api_key")
+            self.model = openrouter_config.get("model", "google/gemini-2.0-flash-001")
+            self.base_url = openrouter_config.get("base_url", "https://openrouter.ai/api/v1")
+        else:
+            self.api_key = openai_config.get("api_key", "")
+            if not self.api_key or self.api_key == "your_openai_api_key_here":
+                self.api_key = os.environ.get("OPENAI_API_KEY", "")
+            self.model = openai_config.get("model", "gpt-4o-mini")
+            self.base_url = openai_config.get("base_url", None)
         
         if not self.api_key:
-            logger.warning("OpenAI API key not configured. Using mock summarization.")
+            logger.warning("OpenAI/OpenRouter API key not configured. Using mock summarization.")
             self.client = None
         else:
             try:
                 from openai import OpenAI
                 # 设置超时和重试参数
-                self.client = OpenAI(
-                    api_key=self.api_key,
-                    timeout=30.0,  # 30秒超时
-                    max_retries=1  # 最多重试1次
-                )
-                logger.info(f"OpenAI client initialized ({self.model})")
+                kwargs = {
+                    "api_key": self.api_key,
+                    "timeout": 30.0,  # 30秒超时
+                    "max_retries": 1  # 最多重试1次
+                }
+                if self.base_url:
+                    kwargs["base_url"] = self.base_url
+                
+                self.client = OpenAI(**kwargs)
+                logger.info(f"OpenAI client initialized ({self.model}, base_url={self.base_url})")
             except ImportError:
                 logger.warning("openai library not installed")
                 self.client = None
@@ -59,21 +70,21 @@ class Summarizer:
         
         news_content = self._prepare_news_content(news_items)
         
-        system_prompt = """你是一位专业的科技编辑，擅长撰写 AI 领域的资讯日报。
-文笔生动专业，能把复杂的技术概念讲解得通俗易懂。
-文章结构清晰，分类合理，适合公众号读者阅读。"""
-        
-        user_prompt = f"""请为微信公众号撰写一篇 AI 资讯日报。
+        system_prompt = """你是一位资深 AI 领域深度观察者，擅长从新闻素材中提炼独特视角，写出有观点、有深度的原创评论。
+写作要求：每篇独立构思，杜绝模板化套路；标题不落俗套，有钩子但不过度夸张；避免反复使用固定句式和结构。
+对每条素材做事实性转述，不编造数据、不虚构人物，所有论断都必须来自给定素材。"""
 
-要求：
-1. 标题要有吸引力，使用 emoji 增加视觉效果
-2. 按主题分类组织内容（如：大模型进展、AI 应用、AI 研究、行业动态等）
-3. 每条资讯要有 50-100 字的专业摘要
-4. 包含原文链接（使用 Markdown 格式）
-5. 结尾要有简短的 AI 行业点评
-6. 语言风格：专业但生动，适合科技爱好者阅读
+        user_prompt = f"""请基于以下 AI 新闻素材，为微信公众号撰写一篇深度原创文章。
 
-今日 AI 资讯素材：
+写作要求：
+1. 从多条素材中提炼一个有价值的核心观点或主题，围绕它展开（而非逐条罗列成日报）
+2. 标题要有辨识度，能引发思考，不使用"XX日报""今日速递"类模板词，不用 emoji 堆砌
+3. 结构自然流畅，可以有小标题分区，但不要固定分类；允许"引申/反问/对比"等评论性段落
+4. 每条重要事实后标注来源（Markdown 格式 [来源](链接)），确保可溯源
+5. 结尾有一段作者视角的总结，发出值得读者思考的问题，输出观点而非情绪
+6. 语言专业但有温度，去 AI 味
+
+今日 AI 新闻素材：
 
 {news_content}
 
@@ -86,7 +97,7 @@ class Summarizer:
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_prompt}
                 ],
-                temperature=0.7,
+                temperature=0.9,
                 max_tokens=4000,
                 timeout=60
             )
