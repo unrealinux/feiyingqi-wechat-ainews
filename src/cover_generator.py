@@ -1087,6 +1087,79 @@ def generate_cover_image(
     return generator.generate_cover(title, output_path, **kwargs)
 
 
+def generate_gradient_cover(title: str, output_path: str = "output/cover.png",
+                            width: int = 1440, height: int = 810,
+                            top_color=(6, 24, 38), bottom_color=(16, 95, 74),
+                            accent=(16, 185, 129)):
+    """生成深色渐变+白色标题文字封面（高对比，公众号 1440x810）。
+
+    参考已验证的美观样式：深色渐变背景，顶部强调条，白色粗体标题，
+    底部作者署名。所有文字用白色/高对比色，避免与背景顺色。
+    """
+    from PIL import Image, ImageDraw, ImageFont
+    import os
+
+    try:
+        img = Image.new('RGB', (width, height), top_color)
+        # 垂直渐变
+        for y in range(height):
+            t = y / height
+            r = int(top_color[0] + (bottom_color[0] - top_color[0]) * t)
+            g = int(top_color[1] + (bottom_color[1] - top_color[1]) * t)
+            b = int(top_color[2] + (bottom_color[2] - top_color[2]) * t)
+            ImageDraw.Draw(img).line([(0, y), (width, y)], fill=(r, g, b))
+
+        draw = ImageDraw.Draw(img)
+
+        def load_font(size):
+            for p in ["C:/Windows/Fonts/msyhbd.ttc", "C:/Windows/Fonts/msyh.ttc",
+                      "C:/Windows/Fonts/simhei.ttf"]:
+                if os.path.exists(p):
+                    return ImageFont.truetype(p, size)
+            return ImageFont.load_default()
+
+        # 顶部强调条
+        draw.rectangle([0, int(height * 0.22), width, int(height * 0.22) + 8], fill=accent)
+
+        # 自动换行标题（最多3行）
+        max_width = int(width * 0.86)
+        font = load_font(int(height * 0.075))
+        lines, current = [], ""
+        for ch in title:
+            if draw.textlength(current + ch, font=font) <= max_width:
+                current += ch
+            else:
+                if lines:
+                    lines.append(current)
+                    break
+                lines.append(current)
+                current = ch
+        if current and len(lines) < 3:
+            lines.append(current)
+        lines = lines[:3]
+
+        # 绘制标题（居中）
+        y = int(height * 0.32)
+        for ln in lines:
+            w = draw.textlength(ln, font=font)
+            draw.text(((width - w) / 2, y), ln, font=font, fill=(255, 255, 255))
+            y += int(height * 0.09)
+
+        # 作者署名
+        small = load_font(int(height * 0.028))
+        byline = "AI前沿观察"
+        w = draw.textlength(byline, font=small)
+        draw.text(((width - w) / 2, height - int(height * 0.09)), byline,
+                  font=small, fill=(180, 220, 200))
+
+        os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)
+        img.save(output_path, quality=95)
+        return output_path
+    except Exception as e:
+        logger.error(f"渐变封面生成失败: {e}")
+        return ""
+
+
 if __name__ == "__main__":
     import sys
     

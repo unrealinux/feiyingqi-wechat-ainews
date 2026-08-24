@@ -59,6 +59,8 @@ nul
 # Output files
 output/*.html
 output/*.md
+output/*.jpg
+output/*.png
 !output/.gitkeep
 
 # Cache

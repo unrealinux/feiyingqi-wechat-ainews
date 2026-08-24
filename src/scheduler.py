@@ -134,10 +134,20 @@ def run_once() -> bool:
             datetime.now().strftime("%Y年%m月%d日") + " AI 观察"
         title = title[:40]  # 微信标题上限
         
+        # 生成高对比渐变封面（深色背景+白色标题文字）
+        from src.cover_generator import generate_gradient_cover
+        import datetime as _dt
+        cover_path = f"output/cv_auto_{_dt.datetime.now().strftime('%Y%m%d')}.jpg"
+        cover_result = generate_gradient_cover(title, cover_path)
+        if not cover_result:
+            logger.warning("渐变封面生成失败，将使用默认封面")
+            cover_path = ""
+        
         logger.info("\n[3/3] Publishing to WeChat...")
         success = publish_article(
             title=title,
             content=article_content,
+            cover_path=cover_path,
             auto_publish=False,
             export_html=True
         )
