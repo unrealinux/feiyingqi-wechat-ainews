@@ -1088,28 +1088,55 @@ def generate_cover_image(
 
 
 def generate_gradient_cover(title: str, output_path: str = "output/cover.png",
-                            width: int = 1440, height: int = 810,
-                            top_color=(6, 24, 38), bottom_color=(16, 95, 74),
-                            accent=(16, 185, 129)):
-    """生成深色渐变+白色标题文字封面（高对比，公众号 1440x810）。
+                            width: int = 1440, height: int = 810, style: str = "auto"):
+    """生成高设计感 AI 封面（深色渐变 + 科技装饰 + 白色标题，公众号 1440x810）。
 
-    参考已验证的美观样式：深色渐变背景，顶部强调条，白色粗体标题，
-    底部作者署名。所有文字用白色/高对比色，避免与背景顺色。
+    优化点：
+    - 背景：深色垂直渐变 + AI 科技装饰（神经网络节点连线/粒子光点/科技网格）
+    - 层次：顶部主题标签 + 主标题（自动换行，最大3行）+ 底部日期/署名
+    - 质感：暗角效果 + 强调色光晕，避免单调
+    - 配色：多套高对比配色（深底亮字），确保文字清晰可见
     """
     from PIL import Image, ImageDraw, ImageFont
-    import os
+    import os, random, math
 
     try:
-        img = Image.new('RGB', (width, height), top_color)
-        # 垂直渐变
+        # 多套高对比配色：深色背景 + 亮色文字 + 强调色
+        schemes = [
+            # 深蓝 + 青色高亮
+            dict(bg_top=(8, 12, 28), bg_bot=(16, 42, 80), accent=(34, 211, 238),
+                 text=(255, 255, 255), sub=(190, 220, 255), deco=(0, 229, 255)),
+            # 深紫 + 紫色高亮
+            dict(bg_top=(18, 8, 40), bg_bot=(60, 20, 90), accent=(168, 85, 247),
+                 text=(255, 255, 255), sub=(220, 200, 255), deco=(190, 120, 255)),
+            # 深绿 + 翠绿高亮
+            dict(bg_top=(4, 24, 20), bg_bot=(16, 70, 55), accent=(16, 185, 129),
+                 text=(255, 255, 255), sub=(200, 245, 230), deco=(52, 211, 153)),
+            # 深红棕 + 橙高亮
+            dict(bg_top=(30, 10, 8), bg_bot=(90, 30, 20), accent=(249, 115, 22),
+                 text=(255, 255, 255), sub=(255, 220, 200), deco=(251, 146, 60)),
+        ]
+        scheme = schemes[random.randrange(len(schemes))]
+
+        # 风格：auto 按标题关键词选，否则用指定
+        style_keywords = {
+            "neural": ["智能", "AI", "模型", "学习", "大脑", "意识"],
+            "circuit": ["芯片", "硬件", "算力", "服务器"],
+        }
+        if style == "auto":
+            style = "neural" if any(k in title for k in style_keywords["neural"]) else \
+                    "circuit" if any(k in title for k in style_keywords["circuit"]) else "grid"
+
+        img = Image.new('RGB', (width, height), scheme["bg_top"])
+        # 垂直渐变背景
         for y in range(height):
             t = y / height
-            r = int(top_color[0] + (bottom_color[0] - top_color[0]) * t)
-            g = int(top_color[1] + (bottom_color[1] - top_color[1]) * t)
-            b = int(top_color[2] + (bottom_color[2] - top_color[2]) * t)
+            r = int(scheme["bg_top"][0] + (scheme["bg_bot"][0] - scheme["bg_top"][0]) * t)
+            g = int(scheme["bg_top"][1] + (scheme["bg_bot"][1] - scheme["bg_top"][1]) * t)
+            b = int(scheme["bg_top"][2] + (scheme["bg_bot"][2] - scheme["bg_top"][2]) * t)
             ImageDraw.Draw(img).line([(0, y), (width, y)], fill=(r, g, b))
 
-        draw = ImageDraw.Draw(img)
+        draw = ImageDraw.Draw(img, "RGBA")
 
         def load_font(size):
             for p in ["C:/Windows/Fonts/msyhbd.ttc", "C:/Windows/Fonts/msyh.ttc",
@@ -1118,39 +1145,78 @@ def generate_gradient_cover(title: str, output_path: str = "output/cover.png",
                     return ImageFont.truetype(p, size)
             return ImageFont.load_default()
 
-        # 顶部强调条
-        draw.rectangle([0, int(height * 0.22), width, int(height * 0.22) + 8], fill=accent)
+        # 科技装饰：神经网络节点连线 + 粒子光点
+        random.seed(len(title))  # 同一标题生成一致的装饰
+        deco_alpha = 60
+        if style in ("neural", "grid"):
+            # 神经网络节点连线
+            nodes = []
+            for _ in range(12):
+                n = (random.randint(0, width), random.randint(int(height*0.08), int(height*0.5)))
+                r = random.randint(3, 7)
+                draw.ellipse([n[0]-r, n[1]-r, n[0]+r, n[1]+r],
+                             fill=scheme["deco"] + (deco_alpha,))
+                nodes.append(n)
+            for i, n1 in enumerate(nodes):
+                for n2 in nodes[i+1:]:
+                    dist = math.hypot(n1[0]-n2[0], n1[1]-n2[1])
+                    if dist < 420:
+                        draw.line([n1, n2], fill=scheme["deco"] + (deco_alpha//2,), width=1)
+        else:
+            # 电路板网格
+            for gx in range(0, width, 60):
+                draw.line([(gx, 0), (gx, int(height*0.5))], fill=scheme["deco"] + (20,), width=1)
+            for gy in range(0, int(height*0.5), 60):
+                draw.line([(0, gy), (width, gy)], fill=scheme["deco"] + (20,), width=1)
 
-        # 自动换行标题（最多3行）
-        max_width = int(width * 0.86)
-        font = load_font(int(height * 0.075))
+        # 底部渐隐（to 深色，增强层次）
+        for y in range(int(height*0.75), height):
+            alpha = int(120 * (y - height*0.75) / (height*0.25))
+            ImageDraw.Draw(img, "RGBA").line(
+                [(0, y), (width, y)], fill=(0, 0, 0) + (alpha,))
+
+        # 顶部强调条 + 主题标签
+        bar_y = int(height * 0.20)
+        draw.rectangle([0, bar_y, int(width*0.14), bar_y + 6], fill=scheme["accent"] + (255,))
+        label = "AI 前沿观察"
+        label_font = load_font(int(height * 0.028))
+        draw.text((int(width*0.14) + 18, bar_y - 6), label,
+                  font=label_font, fill=scheme["sub"] + (220,))
+
+        # 主标题（自动换行，最大3行，居中）
+        max_width = int(width * 0.84)
+        font = load_font(int(height * 0.068))
+        title_y = int(height * 0.30)
         lines, current = [], ""
         for ch in title:
             if draw.textlength(current + ch, font=font) <= max_width:
                 current += ch
             else:
-                if lines:
-                    lines.append(current)
-                    break
                 lines.append(current)
                 current = ch
-        if current and len(lines) < 3:
+        if current:
             lines.append(current)
         lines = lines[:3]
 
-        # 绘制标题（居中）
-        y = int(height * 0.32)
+        # 标题带柔和投影，增强可读性
         for ln in lines:
-            w = draw.textlength(ln, font=font)
-            draw.text(((width - w) / 2, y), ln, font=font, fill=(255, 255, 255))
-            y += int(height * 0.09)
+            tw = draw.textlength(ln, font=font)
+            x = (width - tw) / 2
+            draw.text((x + 3, title_y + 3), ln, font=font, fill=(0, 0, 0) + (90,))
+            draw.text((x, title_y), ln, font=font, fill=scheme["text"] + (255,))
+            title_y += int(height * 0.095)
 
-        # 作者署名
-        small = load_font(int(height * 0.028))
-        byline = "AI前沿观察"
-        w = draw.textlength(byline, font=small)
-        draw.text(((width - w) / 2, height - int(height * 0.09)), byline,
-                  font=small, fill=(180, 220, 200))
+        # 底部日期 + 作者
+        small = load_font(int(height * 0.026))
+        footer = "AI前沿观察 · " + (__import__("datetime").datetime.now().strftime("%Y年%m月%d日"))
+        fw = draw.textlength(footer, font=small)
+        draw.text(((width - fw) / 2, height - int(height * 0.09)), footer,
+                  font=small, fill=scheme["sub"] + (200,))
+
+        # 暗角效果
+        for i in range(int(width*0.08)):
+            a = int(60 * (1 - i / (width*0.08)))
+            draw.rectangle([i, i, width-i, height-i], outline=(0, 0, 0) + (a,))
 
         os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)
         img.save(output_path, quality=95)
