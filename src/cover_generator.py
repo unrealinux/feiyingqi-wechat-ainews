@@ -147,10 +147,10 @@ class CoverGenerator:
                     logger.info(f"使用真实照片背景: {photo_bg}")
                     return self._create_photo_cover(title, photo_bg, output_path)
             
-            # 如果没有真实照片，尝试baoyu-imagine生成
+            # 如果没有真实照片，尝试baoyu-image-gen生成
             try:
                 import subprocess
-                script_path = "C:/Users/Administrator/.config/opencode/skills/baoyu-skills/skills/baoyu-imagine/scripts/main.ts"
+                script_path = "C:/Users/Administrator/.claude/skills/baoyu-image-gen/scripts/main.ts"
                 prompt = self._build_baoyu_prompt(title)
                 
                 cmd = [
@@ -823,15 +823,15 @@ def generate_cover_image(
     style: str = "auto",
     **kwargs
 ) -> str:
-    """生成封面图 - 优先使用baoyu-imagine生成写实AI行业封面"""
+    """生成封面图 - 优先使用baoyu-image-gen生成写实AI行业封面"""
     
-    # 优先使用baoyu-imagine生成写实封面
+    # 优先使用baoyu-image-gen生成写实封面
     try:
         import os
         import subprocess
         
-        # baoyu-imagine脚本路径
-        script_path = "C:/Users/Administrator/.config/opencode/skills/baoyu-skills/skills/baoyu-imagine/scripts/main.ts"
+        # baoyu-image-gen脚本路径
+        script_path = "C:/Users/Administrator/.claude/skills/baoyu-image-gen/scripts/main.ts"
         
         # 根据标题构建专业提示词
         prompt = _build_baoyu_prompt(title)
@@ -839,7 +839,7 @@ def generate_cover_image(
         # 确保输出目录存在
         os.makedirs(os.path.dirname(output_path), exist_ok=True)
         
-        # 使用bun运行baoyu-imagine
+        # 使用bun运行baoyu-image-gen
         cmd = [
             "bun", script_path,
             "--prompt", prompt,
@@ -873,7 +873,7 @@ def generate_cover_image(
 
 
 def _build_baoyu_prompt(title: str) -> str:
-    """根据标题构建专业的baoyu-imagine提示词 - 写实照片风格"""
+    """根据标题构建专业的baoyu-image-gen提示词 - 写实照片风格"""
     # 明确要求写实照片风格
     base = "Professional photography, RAW photo, DSLR camera, "
     
