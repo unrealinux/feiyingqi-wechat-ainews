@@ -938,14 +938,17 @@ def generate_cover_image(
             return ""
 
 def generate_gradient_cover(title: str, output_path: str = "output/cover.png",
-                            width: int = 1440, height: int = 810, style: str = "auto"):
-    """生成高设计感 AI 封面（深色渐变 + 科技装饰 + 白色标题，公众号 1440x810）。
+                            width: int = 1440, height: int = 810, style: str = "auto",
+                            with_text: bool = True):
+    """生成高设计感 AI 封面（深色渐变 + 科技装饰，公众号 1440x810）。
 
     优化点：
     - 背景：深色垂直渐变 + AI 科技装饰（神经网络节点连线/粒子光点/科技网格）
     - 层次：顶部主题标签 + 主标题（自动换行，最大3行）+ 底部日期/署名
     - 质感：暗角效果 + 强调色光晕，避免单调
     - 配色：多套高对比配色（深底亮字），确保文字清晰可见
+
+    with_text=False 时只出背景（无标题/署名/日期），用作写实封面的降级方案。
     """
     from PIL import Image, ImageDraw, ImageFont
     import os, random, math
@@ -1028,10 +1031,11 @@ def generate_gradient_cover(title: str, output_path: str = "output/cover.png",
         # 顶部强调条 + 主题标签
         bar_y = int(height * 0.20)
         draw.rectangle([0, bar_y, int(width*0.14), bar_y + 6], fill=scheme["accent"] + (255,))
-        label = "AI 前沿观察"
-        label_font = load_font(int(height * 0.028))
-        draw.text((int(width*0.14) + 18, bar_y - 6), label,
-                  font=label_font, fill=scheme["sub"] + (220,))
+        if with_text:
+            label = "AI 前沿观察"
+            label_font = load_font(int(height * 0.028))
+            draw.text((int(width*0.14) + 18, bar_y - 6), label,
+                      font=label_font, fill=scheme["sub"] + (220,))
 
         # 主标题（自动换行，最大3行，居中）
         max_width = int(width * 0.84)
@@ -1049,19 +1053,21 @@ def generate_gradient_cover(title: str, output_path: str = "output/cover.png",
         lines = lines[:3]
 
         # 标题带柔和投影，增强可读性
-        for ln in lines:
-            tw = draw.textlength(ln, font=font)
-            x = (width - tw) / 2
-            draw.text((x + 3, title_y + 3), ln, font=font, fill=(0, 0, 0) + (90,))
-            draw.text((x, title_y), ln, font=font, fill=scheme["text"] + (255,))
-            title_y += int(height * 0.095)
+        if with_text:
+            for ln in lines:
+                tw = draw.textlength(ln, font=font)
+                x = (width - tw) / 2
+                draw.text((x + 3, title_y + 3), ln, font=font, fill=(0, 0, 0) + (90,))
+                draw.text((x, title_y), ln, font=font, fill=scheme["text"] + (255,))
+                title_y += int(height * 0.095)
 
         # 底部日期 + 作者
-        small = load_font(int(height * 0.026))
-        footer = "AI前沿观察 · " + (__import__("datetime").datetime.now().strftime("%Y年%m月%d日"))
-        fw = draw.textlength(footer, font=small)
-        draw.text(((width - fw) / 2, height - int(height * 0.09)), footer,
-                  font=small, fill=scheme["sub"] + (200,))
+        if with_text:
+            small = load_font(int(height * 0.026))
+            footer = "AI前沿观察 · " + (__import__("datetime").datetime.now().strftime("%Y年%m月%d日"))
+            fw = draw.textlength(footer, font=small)
+            draw.text(((width - fw) / 2, height - int(height * 0.09)), footer,
+                      font=small, fill=scheme["sub"] + (200,))
 
         # 暗角效果
         for i in range(int(width*0.08)):

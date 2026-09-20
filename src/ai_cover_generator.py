@@ -87,6 +87,7 @@ class AICoverGenerator:
         prompt_data = self.AI_PROMPTS.get(element, self.AI_PROMPTS["datacenter"])
         
         # 检查可用的API密钥
+        agnes_key = self.config.get("agnes", {}).get("api_key", "")
         glm_key = self.config.get("zhipu", {}).get("api_key", "")
         zimage_key = self.config.get("zimage", {}).get("api_key", "")
         gemini_key = self.config.get("gemini", {}).get("api_key", "")
@@ -94,7 +95,17 @@ class AICoverGenerator:
         image_buffer = None
         used_provider = None
         
-        # 优先级：国内API > 国际API > 渐变降级
+        # 优先级：Agnes > 国内API > 国际API > 渐变降级
+        
+        # 0. 尝试Agnes (Sapiens AI)
+        if not image_buffer and agnes_key:
+            try:
+                print("[AI Cover] 尝试Agnes...")
+                image_buffer = self._generate_with_agnes(agnes_key, prompt_data["prompt"])
+                used_provider = "Agnes (Sapiens AI)"
+                print("[OK] Agnes生成成功")
+            except Exception as e:
+                print(f"[Warning] Agnes失败: {e}")
         
         # 1. 尝试智谱AI (GLM)
         if not image_buffer and glm_key:
@@ -146,6 +157,44 @@ class AICoverGenerator:
         
         print(f"[Saved] 封面图已保存: {output_path}")
         return output_path, used_provider
+    
+    def _generate_with_agnes(self, api_key: str, prompt: str) -> bytes:
+        """
+        使用Agnes (Sapiens AI)生成图片
+        
+        API文档: https://apihub.agnes-ai.com/v1/images/generations
+        """
+        response = requests.post(
+            "https://apihub.agnes-ai.com/v1/images/generations",
+            headers={
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json"
+            },
+            json={
+                "model": "agnes-image-2.5-flash",
+                "prompt": prompt,
+                "size": "1024x1024"
+            },
+            proxies=self.proxies,
+            timeout=120
+        )
+        
+        if response.status_code != 200:
+            raise Exception(f"Agnes API错误: {response.status_code}")
+        
+        data = response.json()
+        
+        if not data.get("data") or not data["data"][0].get("url"):
+            raise Exception("Agnes响应中没有图片URL")
+        
+        # 下载图片
+        image_url = data["data"][0]["url"]
+        image_response = requests.get(image_url, timeout=120)
+        
+        if image_response.status_code != 200:
+            raise Exception(f"下载图片失败: {image_response.status_code}")
+        
+        return image_response.content
     
     def _generate_with_glm(self, api_key: str, prompt: str) -> bytes:
         """
