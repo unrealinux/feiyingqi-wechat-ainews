@@ -580,15 +580,20 @@ class WeChatPublisher:
         
         return html
     
-    def export_html(self, content: str, title: str, output_dir: str = "output") -> str:
-        """导出为完整的 HTML 文件"""
+    def export_html(self, content: str, title: str, output_dir: str = "output",
+                    content_is_html: bool = False) -> str:
+        """导出为完整的 HTML 文件（预览用）。
+
+        content_is_html=True 时 content 已是渲染好的微信 HTML（如 editorial_template
+        的产出），不再做 Markdown 转换，直接包一层预览外壳。
+        """
         import os
         os.makedirs(output_dir, exist_ok=True)
         
         today = datetime.now().strftime("%Y%m%d")
         filename = f"{output_dir}/article_{today}.html"
         
-        html_content = self.markdown_to_html(content)
+        html_content = content if content_is_html else self.markdown_to_html(content)
         
         full_html = f"""<!DOCTYPE html>
 <html lang="zh-CN">
@@ -701,13 +706,19 @@ class WeChatPublisher:
 def publish_article(title: str, content: str, author: str = "", 
                     digest: str = "", cover_path: str = "",
                     auto_publish: bool = False, 
-                    export_html: bool = True) -> bool:
-    """发布文章"""
+                    export_html: bool = True,
+                    content_is_html: bool = False) -> bool:
+    """发布文章
+
+    Args:
+        content_is_html: content 是否已是渲染好的微信 HTML（如 editorial_template 产出），
+            为 True 时跳过 Markdown 转换。
+    """
     publisher = WeChatPublisher()
-    html_content = publisher.markdown_to_html(content)
+    html_content = content if content_is_html else publisher.markdown_to_html(content)
     
     if export_html:
-        publisher.export_html(content, title)
+        publisher.export_html(content, title, content_is_html=content_is_html)
     
     if not publisher.app_id or publisher.app_id == "your_app_id_here":
         logger.warning("WeChat not configured, skipping publish")

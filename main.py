@@ -13,6 +13,12 @@ from datetime import datetime
 # 导入自定义模块
 from src.cover_generator import generate_cover_image
 
+# AGENTS.md 规范：日志/输出含中文与 emoji，Windows GBK 控制台需显式 UTF-8，
+# 否则 print 会抛 UnicodeEncodeError（chcp 65001 的终端下显示正常）
+for _stream in (sys.stdout, sys.stderr):
+    if hasattr(_stream, "reconfigure"):
+        _stream.reconfigure(encoding="utf-8", errors="replace")
+
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s',
@@ -83,7 +89,10 @@ def main():
     cover_parser.add_argument("--ai", action="store_true", help="使用AI生成")
     
     # 服务命令
-    subparsers.add_parser("schedule", help="启动定时任务")
+    subparsers.add_parser("schedule", help="启动定时任务（常驻进程）")
+    daily_parser = subparsers.add_parser("daily", help="按调度配置执行一次（仅建草稿，不群发）")
+    daily_parser.add_argument("--dry-run", action="store_true",
+                              help="只在本地生成 HTML 预览，不创建草稿（发布前审阅）")
     subparsers.add_parser("dashboard", help="启动增强版 Web 界面")
     subparsers.add_parser("dashboard-simple", help="启动简洁版 Web 界面")
     subparsers.add_parser("api", help="启动 REST API")
@@ -123,6 +132,8 @@ def main():
         generate_cover(args.title, args.ai)
     elif args.command == "schedule":
         run_scheduler()
+    elif args.command == "daily":
+        run_daily(dry_run=getattr(args, "dry_run", False))
     elif args.command == "dashboard":
         run_enhanced_dashboard()
     elif args.command == "dashboard-simple":
@@ -234,7 +245,8 @@ def run_once(args=None):
             ])
             print("   跳过LLM，直接拼接")
         else:
-            article_content = generate_article(news_items)
+            # allow_mock=False：LLM 不可用时直接失败，不生成 mock 拼贴稿（AGENTS.md）
+            article_content = generate_article(news_items, allow_mock=False)
             print(f"   生成完成 ({len(article_content)} 字符)")
         
         # 3. 发布/保存
@@ -394,12 +406,33 @@ def generate_cover(title=None, use_ai=False):
 
 
 def run_scheduler():
-    """启动定时任务"""
+    """启动定时任务（常驻进程）"""
     from src.scheduler import start_scheduler, run_once
     
     print("\n📅 启动定时任务模式...")
     print("   按 Ctrl+C 停止")
     start_scheduler(run_once)
+
+
+def run_daily(dry_run: bool = False):
+    """执行一次定时流程，供 Windows 任务计划调用。
+
+    与常驻的 `schedule` 命令走同一条流水线（src.scheduler.run_once）：
+    抓取新闻 -> 结构化内容 -> 固定排版渲染 -> 写入微信草稿箱。
+    AGENTS.md 红线：只调 create_draft，绝不调 publish_draft 群发。
+    dry_run=True 时只在本地生成 HTML 预览，不碰微信草稿箱（发布前审阅用）。
+    退出码：0 成功 / 1 失败（便于任务计划记录真实结果）。
+    """
+    if dry_run:
+        from src.dry_run import run_local_preview
+        print("\n📅 [daily] dry-run：只在本地生成预览，不创建草稿...")
+        sys.exit(0 if run_local_preview() else 1)
+
+    from src.scheduler import run_once as scheduled_run_once
+
+    print("\n📅 [daily] 执行一次定时任务（仅建草稿，不群发）...")
+    success = scheduled_run_once()
+    sys.exit(0 if success else 1)
 
 
 def run_enhanced_dashboard():
@@ -494,21 +527,32 @@ def run_health_check():
 
 def run_config_validation():
     """验证配置"""
-    from src.validate_config import validate_all
+    from src.config import load_config
+    from src.validate_config import validate_config
     
     print("\n✅ 配置验证")
     print("="*50)
     
     try:
-        results = validate_all()
+        config = load_config()
+        result = validate_config(config)
         
-        for category, checks in results.items():
-            print(f"\n📁 {category}:")
-            for check, status in checks.items():
-                emoji = "✅" if status else "❌"
-                print(f"   {emoji} {check}")
+        status = "✅ 通过" if result["valid"] else f"❌ 失败（{result['error_count']} 个错误）"
+        print(f"\n📊 验证结果: {status}")
+        
+        if result["errors"]:
+            print("\n❌ 错误详情:")
+            for error in result["errors"]:
+                print(f"   [{error.error_type.value}] {error.field}: {error.message}")
+        
+        if result["warnings"]:
+            print(f"\n⚠️ 警告 ({result['warning_count']} 个):")
+            for warning in result["warnings"]:
+                print(f"   [{warning.error_type.value}] {warning.field}: {warning.message}")
+        
+        # 注：DashScope 风格 key 触发的"OpenAI API Key 格式不正确"为已知非致命警告（见 AGENTS.md）
     except Exception as e:
-        print(f"❌ 验证失败: {e}")
+        print(f"\n❌ 验证失败: {e}")
 
 
 def run_mock_mode():

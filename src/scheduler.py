@@ -102,10 +102,11 @@ def start_scheduler(task_func: Callable):
 
 
 def run_once() -> bool:
-    """运行一次完整流程"""
+    """运行一次完整流程：抓新闻 → LLM 产出结构化内容 → 固定排版渲染 → 写草稿。"""
     from src.fetcher import fetch_news, get_mock_news
-    from src.summarizer import generate_article
+    from src.summarizer import Summarizer
     from src.publisher import publish_article
+    from src import editorial_template
     
     start_time = time.time()
     
@@ -114,7 +115,7 @@ def run_once() -> bool:
     logger.info("="*50)
     
     try:
-        logger.info("\n[1/3] Fetching latest AI news...")
+        logger.info("\n[1/4] Fetching latest AI news...")
         news_items = fetch_news()
         
         if not news_items:
@@ -123,33 +124,41 @@ def run_once() -> bool:
         
         logger.info(f"Fetched {len(news_items)} news items")
         
-        logger.info("\n[2/3] Generating article with AI...")
-        article_content = generate_article(news_items)
-        logger.info(f"Article generated ({len(article_content)} characters)")
+        logger.info("\n[2/4] Generating structured content with AI...")
+        # allow_mock=False：LLM 欠费/掉线时宁可本次失败，也不生成 mock 拼贴稿
+        spec = Summarizer().generate_editorial_spec(news_items, allow_mock=False)
+        title = editorial_template.draft_title(spec)
+        logger.info(f"Title: {title}")
+
+        logger.info("\n[3/4] Rendering fixed editorial layout...")
+        article_html = editorial_template.render(spec)
+        logger.info(f"Article rendered ({len(article_html)} characters)")
         
-        # 从文章提取原创标题（取第一个 Markdown 一级标题）
-        import re
-        title_match = re.search(r"^#\s+(.+)$", article_content, re.MULTILINE)
-        title = title_match.group(1).strip() if title_match else \
-            datetime.now().strftime("%Y年%m月%d日") + " AI 观察"
-        title = title[:40]  # 微信标题上限
-        
-        # 生成高对比渐变封面（深色背景+白色标题文字）
+        # 生成封面：优先写实风（Agnes 出图），失败则降级到本地渐变封面
         from src.cover_generator import generate_gradient_cover
         import datetime as _dt
         cover_path = f"output/cv_auto_{_dt.datetime.now().strftime('%Y%m%d')}.jpg"
-        cover_result = generate_gradient_cover(title, cover_path)
+        cover_result = None
+        try:
+            from src.ai_photo_cover import generate_ai_photo_cover
+            cover_result, _theme = generate_ai_photo_cover(title, cover_path)
+        except Exception as e:
+            logger.warning(f"写实封面生成异常，改用渐变封面: {e}")
+        if not cover_result:
+            logger.info("改用本地渐变封面（无文字版）")
+            cover_result = generate_gradient_cover(title, cover_path, with_text=False)
         if not cover_result:
             logger.warning("渐变封面生成失败，将使用默认封面")
             cover_path = ""
         
-        logger.info("\n[3/3] Publishing to WeChat...")
+        logger.info("\n[4/4] Publishing to WeChat...")
         success = publish_article(
             title=title,
-            content=article_content,
+            content=article_html,
             cover_path=cover_path,
             auto_publish=False,
-            export_html=True
+            export_html=True,
+            content_is_html=True
         )
         
         elapsed = time.time() - start_time
@@ -157,7 +166,6 @@ def run_once() -> bool:
         logger.info("\n" + "="*50)
         if success:
             logger.info("✅ All done! Article saved to:")
-            logger.info(f"   - output/article_{datetime.now().strftime('%Y%m%d')}.md")
             logger.info(f"   - output/article_{datetime.now().strftime('%Y%m%d')}.html")
             logger.info("\nLogin to mp.weixin.qq.com to publish")
         else:
@@ -169,6 +177,7 @@ def run_once() -> bool:
         
     except Exception as e:
         logger.error(f"Error in run_once: {e}", exc_info=True)
+        logger.error("本次不创建草稿。修复后重跑：python main.py daily")
         return False
 
 
