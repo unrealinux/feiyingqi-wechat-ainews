@@ -85,56 +85,41 @@ class ConfigValidator:
         
         # 验证 LLM 提供商配置
         llm_config = config.get("llm", {})
-        provider = llm_config.get("provider", "auto")
-        
-        # 验证 OpenAI 配置
-        openai = config.get("openai", {})
-        openai_key = openai.get("api_key", "")
-        if openai_key and not openai_key.startswith("your_"):
-            if not re.match(r"^sk-[a-zA-Z0-9]{48,}$", openai_key):
+        provider = (llm_config.get("provider") or "auto").strip().lower()
+
+        # 各提供商配置段：用于「格式体检」和「是否至少有一个可用」
+        llm_sections = {
+            "openai": config.get("openai", {}),
+            "openrouter": config.get("openrouter", {}),
+            "deepseek": config.get("deepseek", {}),
+            "zhipu": config.get("zhipu", {}),
+            "siliconflow": config.get("siliconflow", {}),
+            "agnes": config.get("agnes", {}),
+        }
+
+        def _llm_key(name: str) -> str:
+            value = (llm_sections.get(name) or {}).get("api_key", "") or ""
+            return "" if value.startswith("your_") else value
+
+        # 只给「实际会被使用」的提供商做格式检查。
+        # 早前的写法硬套 OpenAI 格式 (sk-[a-zA-Z0-9]{48,})，只要 .env 里留着一把
+        # 没用上的旧 key 就报警，把真正的错误派报掉了。
+        checked_providers = [provider] if provider in llm_sections else list(llm_sections)
+        for name in checked_providers:
+            key = _llm_key(name)
+            if key and (len(key) < 20 or re.search(r"\s", key)):
                 errors.append(ValidationError(
-                    field="openai.api_key",
+                    field=f"{name}.api_key",
                     error_type=ValidationErrorType.FORMAT,
-                    message="OpenAI API Key 格式不正确",
-                    value=openai_key[:10] + "..."
+                    message=f"{name} API Key 格式可疑（长度不足或含空白字符）",
+                    value=key[:10] + "..."
                 ))
-        
-        # 验证 DeepSeek 配置
-        deepseek = config.get("deepseek", {})
-        deepseek_key = deepseek.get("api_key", "")
-        if deepseek_key and not deepseek_key.startswith("your_"):
-            if len(deepseek_key) < 20:
-                errors.append(ValidationError(
-                    field="deepseek.api_key",
-                    error_type=ValidationErrorType.FORMAT,
-                    message="DeepSeek API Key 格式不正确",
-                    value=deepseek_key[:10] + "..."
-                ))
-        
-        # 验证智谱AI 配置
-        zhipu = config.get("zhipu", {})
-        zhipu_key = zhipu.get("api_key", "")
-        if zhipu_key and not zhipu_key.startswith("your_"):
-            if len(zhipu_key) < 20:
-                errors.append(ValidationError(
-                    field="zhipu.api_key",
-                    error_type=ValidationErrorType.FORMAT,
-                    message="智谱AI API Key 格式不正确",
-                    value=zhipu_key[:10] + "..."
-                ))
-        
-        # 检查是否至少有一个 LLM 配置
-        has_llm = any([
-            openai_key and not openai_key.startswith("your_"),
-            deepseek_key and not deepseek_key.startswith("your_"),
-            zhipu_key and not zhipu_key.startswith("your_")
-        ])
-        
-        if not has_llm:
+
+        if not any(_llm_key(name) for name in llm_sections):
             errors.append(ValidationError(
                 field="llm",
                 error_type=ValidationErrorType.REQUIRED,
-                message="至少需要配置一个 LLM 提供商 (OpenAI/DeepSeek/智谱AI)"
+                message="至少需要配置一个 LLM 提供商 (Agnes/OpenAI/DeepSeek/智谱AI/SiliconFlow/OpenRouter)"
             ))
         
         return errors

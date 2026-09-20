@@ -3,10 +3,13 @@ wechat:
   app_id: "your_app_id_here"
   app_secret: "your_app_secret_here"
 
-# LLM 配置 - 国内推荐 DeepSeek/智谱AI (免费额度)
-# 优先级: DeepSeek > 智谱AI > SiliconFlow > OpenAI
+# LLM 配置 - 兼容 OpenAI /chat/completions 的任意服务商
+# provider 可选: auto, agnes, deepseek, zhipu, siliconflow, openrouter, openai
+# auto = 按 agnes > deepseek > zhipu > siliconflow > openrouter > openai 顺序
+#        挑第一个配了 key 的；model 留空则用该提供商默认模型
 llm:
-  provider: "auto"  # auto, deepseek, zhipu, siliconflow, openai
+  provider: "auto"
+  model: ""
 
 openai:
   api_key: "your_openai_api_key_here"
@@ -26,6 +29,12 @@ zhipu:
 siliconflow:
   api_key: ""  # https://siliconflow.cn
   model: "Qwen/Qwen2-7B-Instruct"
+
+# Agnes (Sapiens AI) - 封面图生成 + 文本模型（同一把 key）
+agnes:
+  api_key: ""  # https://apihub.agnes-ai.com/
+  model: "agnes-image-2.5-flash"   # 封面图模型
+  text_model: "agnes-3.0-flash"    # 文本模型（llm.provider=agnes 时使用）
 
 # 阿里通义万相 Z-Image (国内)
 zimage:

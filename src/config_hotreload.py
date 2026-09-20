@@ -101,10 +101,10 @@ class ConfigHotReloader:
         if "wechat" not in config:
             config["wechat"] = {}
         
-        if os.environ.get("WECHAT_APPID"):
-            config["wechat"]["app_id"] = os.environ["WECHAT_APPID"]
-        if os.environ.get("WECHAT_SECRET"):
-            config["wechat"]["app_secret"] = os.environ["WECHAT_SECRET"]
+        if os.environ.get("WECHAT_APP_ID") or os.environ.get("WECHAT_APPID"):
+            config["wechat"]["app_id"] = os.environ.get("WECHAT_APP_ID") or os.environ["WECHAT_APPID"]
+        if os.environ.get("WECHAT_APP_SECRET") or os.environ.get("WECHAT_SECRET"):
+            config["wechat"]["app_secret"] = os.environ.get("WECHAT_APP_SECRET") or os.environ["WECHAT_SECRET"]
         
         # OpenAI 配置
         if "openai" not in config:
