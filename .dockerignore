@@ -1,0 +1,26 @@
+# 密钥与敏感配置（通过挂载或 ENV 注入，不进镜像）
+.env
+config.yaml
+config.domestic.yaml
+
+# 产物与缓存（运行时生成）
+output/
+cache/
+backup/
+*.db
+*.sqlite3
+
+# 归档的一次性脚本
+archive/
+
+# Python / VCS 元数据
+__pycache__/
+*.pyc
+.pytest_cache/
+.git/
+.github/
+
+# 其他
+Dockerfile
+docker-compose.yml
+nul

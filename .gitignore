@@ -67,6 +67,21 @@ output/*.png
 cache/*.json
 !cache/.gitkeep
 
+# Logs (task-scheduler output)
+logs/
+
+# Cover cache (generated, keyed by hash)
+cache/covers/
+
+# Local backup of generated covers/articles
+backup/
+
+# Local draft counter (runtime state)
+output/_draftcount.txt
+
+# Local tool metadata
+.freebuff/
+
 # OS
 .DS_Store
 Thumbs.db
