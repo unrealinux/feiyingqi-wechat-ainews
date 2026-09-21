@@ -29,6 +29,30 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
+class LiveWriteBlockedInTest(RuntimeError):
+    """测试进程里尝试写线上账号（建/删草稿、群发）时抛出。"""
+
+
+def _assert_not_in_test_context(action: str) -> None:
+    """测试进程绝不允许写线上账号。
+
+    AGENTS.md 红线：“不要把公众号草稿箱当测试场”。
+    历史上 tests/test_main.py::TestScheduler::test_run_once_returns_bool
+    直接调用了真实的 run_once()，而 run_once() 会一路走到 create_draft()——
+    结果是每跑一次 pytest 就往草稿箱里塞一篇真实草稿（已证实：
+    01:33:13 / 01:42:48 / 14:44 的草稿均与 pytest 运行时刻一一对应）。
+
+    pytest 在每个用例执行期间会设置 PYTEST_CURRENT_TEST，据此直接拒绝，
+    避免以后任何人再写出“顺手就发了”的测试。生产链路（定时任务 / CLI）
+    不带该变量，行为完全不变。
+    """
+    if os.environ.get("PYTEST_CURRENT_TEST") and not os.environ.get("ALLOW_LIVE_WECHAT_IN_TEST"):
+        raise LiveWriteBlockedInTest(
+            f"拒绝在测试进程中执行线上写操作：{action}。"
+            "测试请 mock 掉发布层；确需联调请显式设 ALLOW_LIVE_WECHAT_IN_TEST=1。"
+        )
+
+
 class WeChatPublisher:
     """微信公众号发布器"""
     
@@ -155,6 +179,7 @@ class WeChatPublisher:
         Args:
             cover_media_id: 预上传的封面media_id（优先于cover_path）
         """
+        _assert_not_in_test_context("create_draft（创建草稿）")
         token = self.get_access_token()
         if not token:
             logger.error("Failed to get access token")
@@ -313,6 +338,7 @@ class WeChatPublisher:
     
     def update_draft_cover(self, media_id: str, thumb_media_id: str) -> bool:
         """更新草稿封面图"""
+        _assert_not_in_test_context("update_draft_cover（改草稿）")
         token = self.get_access_token()
         if not token:
             return False
@@ -341,7 +367,11 @@ class WeChatPublisher:
             return False
 
     def _upload_media(self, file_path: str, media_type: str = "image") -> Optional[str]:
-        """上传媒体文件到永久素材（带重试）"""
+        """上传媒体文件到永久素材（带重试）
+
+        注意：这会向账号永久素材库真实写入，测试进程内一并拒绝。
+        """
+        _assert_not_in_test_context("_upload_media（上传永久素材）")
         token = self.get_access_token()
         if not token:
             return None
@@ -624,7 +654,11 @@ class WeChatPublisher:
         return filename
     
     def list_drafts(self, offset: int = 0, count: int = 20) -> list:
-        """获取草稿列表，返回 [(title, media_id), ...]"""
+        """获取草稿列表，返回 [(title, media_id), ...]
+
+        注意：draft/batchget 的标题在 content.news_item[0].title，不在 content.title
+        （后者恒为缺失，早期版本读错键导致所有草稿都显示“(无标题)”）。
+        """
         token = self.get_access_token()
         if not token:
             return []
@@ -637,13 +671,18 @@ class WeChatPublisher:
                 json={"offset": offset, "count": count, "no_content": 0},
                 timeout=30, proxies=proxies
             )
+            # 微信此接口返回 text/plain 且不带 charset，requests 会按 ISO-8859-1
+            # 解码，中文标题会变乱码；显式按 UTF-8 解码。
+            response.encoding = "utf-8"
             data = response.json()
             items = data.get("item", [])
             result = []
             for it in items:
                 m = it.get("media_id", "")
-                c = it.get("content", {})
-                t = c.get("title", "(无标题)")
+                c = it.get("content", {}) or {}
+                news = c.get("news_item") or []
+                first = news[0] if news else {}
+                t = (first.get("title") or c.get("title") or "(无标题)").strip()
                 result.append((t, m))
             return result
         except Exception as e:
@@ -652,6 +691,7 @@ class WeChatPublisher:
 
     def delete_draft(self, media_id: str) -> bool:
         """删除指定草稿"""
+        _assert_not_in_test_context("delete_draft（删除草稿）")
         token = self.get_access_token()
         if not token or not media_id:
             return False
@@ -674,7 +714,8 @@ class WeChatPublisher:
             return False
 
     def publish_draft(self, media_id: str) -> Optional[str]:
-        """发布草稿"""
+        """发布草稿（群发，强操作，需用户逐次明确授权）"""
+        _assert_not_in_test_context("publish_draft（群发）")
         token = self.get_access_token()
         if not token:
             return None

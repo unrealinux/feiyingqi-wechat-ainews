@@ -116,14 +116,55 @@ class TestConfig(unittest.TestCase):
 
 
 class TestScheduler(unittest.TestCase):
-    """测试 Scheduler 模块"""
-    
-    def test_run_once_returns_bool(self):
+    """测试 Scheduler 模块
+
+    重要：绝不能直接调 run_once()。它会抓新闻、调 LLM、出封面，最后
+    一路走到 create_draft()—— 那是真实写线上草稿箱的写操作。
+    历史上这个用例就是那么写的，导致每跑一次 pytest 就往草稿箱塞一篇真实草稿。
+    这里改为把流水线的外部边界（抓取/LLM/渲染/发布）全部 mock 掉，
+    只验证 run_once 自身的契约：返回 bool、不抛异常、且真的调用了发布。
+    """
+
+    def test_run_once_returns_bool_without_touching_wechat(self):
+        from unittest.mock import patch, MagicMock
         from src.scheduler import run_once
-        
-        result = run_once()
-        
+
+        with patch("src.fetcher.fetch_news", return_value=[MagicMock()]) as m_fetch, \
+             patch("src.summarizer.Summarizer.generate_editorial_spec",
+                   return_value={"title": "单元测试标题"}) as m_llm, \
+             patch("src.editorial_template.draft_title", return_value="单元测试标题"), \
+             patch("src.editorial_template.render", return_value="<p>正文</p>"), \
+             patch("src.ai_photo_cover.generate_ai_photo_cover", return_value=(None, None)), \
+             patch("src.cover_generator.generate_gradient_cover", return_value=None), \
+             patch("src.publisher.publish_article", return_value=True) as m_publish:
+            result = run_once()
+
         self.assertIsInstance(result, bool)
+        self.assertTrue(result)
+        self.assertTrue(m_fetch.called, "应当抓取新闻")
+        self.assertTrue(m_llm.called, "应当调用 LLM 产出结构化内容")
+        self.assertTrue(m_publish.called, "应当走到发布步骤")
+        # 发布层已被 mock，真实草稿不可能被创建
+        self.assertEqual(
+            m_publish.call_args.kwargs.get("auto_publish"),
+            False,
+            "必须只建草稿（auto_publish=False），绝不群发",
+        )
+
+    def test_run_once_fails_closed_when_llm_unavailable(self):
+        """LLM 不可用时必须 fail-closed 返回 False，而不是塞一篇 mock 稿。"""
+        from unittest.mock import patch, MagicMock
+        from src.scheduler import run_once
+        from src.summarizer import LLMUnavailableError
+
+        with patch("src.fetcher.fetch_news", return_value=[MagicMock()]), \
+             patch("src.summarizer.Summarizer.generate_editorial_spec",
+                   side_effect=LLMUnavailableError("no llm")), \
+             patch("src.publisher.publish_article") as m_publish:
+            result = run_once()
+
+        self.assertFalse(result)
+        self.assertFalse(m_publish.called, "LLM 不可用时不得进入发布步骤")
 
 
 class TestDeduplication(unittest.TestCase):
