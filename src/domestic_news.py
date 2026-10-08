@@ -57,8 +57,13 @@ DOMESTIC_SITES = {
 }
 
 
-def fetch_domestic_news(max_workers: int = 5) -> List:
-    """并发获取国内新闻"""
+def fetch_domestic_news(max_workers: int = 5, sites: Optional[List[str]] = None) -> List:
+    """并发获取国内新闻
+
+    Args:
+        sites: 只抓取这些 DOMESTIC_SITES 键（如 ["36kr", "量子位"]）；
+               None 表示全部。
+    """
     from src.fetcher import NewsItem
     
     results = []
@@ -133,6 +138,7 @@ def fetch_domestic_news(max_workers: int = 5) -> List:
         futures = {
             executor.submit(fetch_single_site, name, config): name 
             for name, config in DOMESTIC_SITES.items()
+            if sites is None or name in sites
         }
         
         for future in as_completed(futures):
@@ -271,33 +277,62 @@ def get_weibo_hot() -> List:
     return []
 
 
-def fetch_all_domestic() -> List:
-    """获取所有国内新闻"""
+# config.yaml news.domestic_sources 的键 → DOMESTIC_SITES 的键
+# （bing_china 暂无对应站点抓取实现，先不映射）
+CONFIG_KEY_TO_SITE = {
+    "36kr": "36kr",
+    "liangzi": "量子位",
+    "jiqizhixin": "机器之心",
+    "huxiu": "虎嗅",
+    "zhihu": "知乎",
+    "weibo": "微博",
+    "baidu": "百度",
+}
+
+
+def fetch_all_domestic(domestic_cfg: Optional[dict] = None) -> List:
+    """获取所有国内新闻
+
+    Args:
+        domestic_cfg: config.yaml 的 news.domestic_sources 段；
+                      None 表示不按配置过滤（全部启用）。
+    """
+    cfg = domestic_cfg if domestic_cfg is not None else {}
+
+    def _on(key: str) -> bool:
+        return bool(cfg.get(key, True))
+
+    enabled_sites = [site for ckey, site in CONFIG_KEY_TO_SITE.items() if _on(ckey)]
+
     all_news = []
-    
+
     logger.info("="*50)
     logger.info("Fetching domestic news sources...")
     logger.info("="*50)
-    
+
     # 知乎
-    logger.info("Fetching Zhihu hot...")
-    zhihu_news = get_zhihu_hot()
-    all_news.extend(zhihu_news)
-    
+    if "知乎" in enabled_sites:
+        logger.info("Fetching Zhihu hot...")
+        zhihu_news = get_zhihu_hot()
+        all_news.extend(zhihu_news)
+
     # 微博
-    logger.info("Fetching Weibo hot...")
-    weibo_news = get_weibo_hot()
-    all_news.extend(weibo_news)
-    
-    # 网站采集
-    logger.info("Fetching domestic sites...")
-    site_news = fetch_domestic_news()
-    all_news.extend(site_news)
-    
+    if "微博" in enabled_sites:
+        logger.info("Fetching Weibo hot...")
+        weibo_news = get_weibo_hot()
+        all_news.extend(weibo_news)
+
+    # 网站采集（知乎/微博已由专用接口覆盖，站点抓取里跳过，避免重复）
+    site_only = [s for s in enabled_sites if s not in ("知乎", "微博")]
+    if site_only:
+        logger.info("Fetching domestic sites...")
+        site_news = fetch_domestic_news(sites=site_only)
+        all_news.extend(site_news)
+
     logger.info("="*50)
     logger.info(f"Domestic news total: {len(all_news)}")
     logger.info("="*50)
-    
+
     return all_news
 
 

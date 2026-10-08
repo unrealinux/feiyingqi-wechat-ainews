@@ -36,8 +36,22 @@ class Scheduler:
         self.interval_days = int(scheduler_config.get("interval_days", 1))
         self.enabled = scheduler_config.get("enabled", False)
         
+        # 真正按配置时区计算（此前 timezone 只打日志、不生效）
+        try:
+            from zoneinfo import ZoneInfo
+            self.tz = ZoneInfo(self.timezone)
+        except Exception as e:
+            logger.warning(f"时区 {self.timezone!r} 不可用（{e}），回退本机时区")
+            self.tz = None
+        
         signal.signal(signal.SIGINT, self._signal_handler)
         signal.signal(signal.SIGTERM, self._signal_handler)
+    
+    def _now(self) -> datetime:
+        """当前时间（配置时区；不可用时回退本机时区）。"""
+        if self.tz is not None:
+            return datetime.now(self.tz)
+        return datetime.now()
     
     def _signal_handler(self, signum, frame):
         logger.info("\nReceived shutdown signal. Stopping...")
@@ -51,13 +65,14 @@ class Scheduler:
             return
         
         logger.info("="*50)
-        logger.info(f"Scheduler started - Every {self.interval_days} day(s) at {self.target_time} ({self.timezone})")
+        tz_note = str(self.tz) if self.tz is not None else "本机时区"
+        logger.info(f"Scheduler started - Every {self.interval_days} day(s) at {self.target_time} ({tz_note})")
         logger.info("="*50)
         
         self.running = True
         
         while self.running:
-            now = datetime.now()
+            now = self._now()
             target_hour, target_minute = map(int, self.target_time.split(":"))
             
             target = now.replace(
@@ -83,7 +98,7 @@ class Scheduler:
     
     def _run_task(self):
         logger.info("\n" + "="*50)
-        logger.info(f"Running task at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+        logger.info(f"Running task at {self._now().strftime('%Y-%m-%d %H:%M:%S')}")
         logger.info("="*50)
         
         try:

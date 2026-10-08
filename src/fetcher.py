@@ -167,6 +167,12 @@ class NewsFetcher:
             for site in self.AI_NEWS_SITES:
                 tasks.append(("website", site["name"], site))
         
+        # 国内源（独立开关段 news.domestic_sources，全部键缺省视为启用）
+        domestic_cfg = self.news_config.get("domestic_sources") or {}
+        use_domestic = bool(domestic_cfg.get("enabled", False))
+        if use_domestic:
+            tasks.append(("domestic", domestic_cfg, None))
+        
         logger.info(f"共 {len(tasks)} 个获取任务")
         
         with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
@@ -182,14 +188,19 @@ class NewsFetcher:
                     future = executor.submit(self._fetch_hackernews_with_retry)
                 elif task_type == "website":
                     future = executor.submit(self._fetch_website_with_retry, param1)
+                elif task_type == "domestic":
+                    future = executor.submit(self._fetch_domestic_with_retry, param1)
                 else:
                     continue
                 future_to_task[future] = task
             
             from concurrent.futures import TimeoutError as FutureTimeout
             
+            # 国内源内部是 知乎→微博→站点 串行 + 每站 10s 超时，给足预算，
+            # 否则它总会被 as_completed 超时切掉、白接不用
+            pool_timeout = self.timeout * 2 + (40 if use_domestic else 0)
             try:
-                completed_iter = as_completed(future_to_task, timeout=self.timeout * 2)
+                completed_iter = as_completed(future_to_task, timeout=pool_timeout)
                 for future in completed_iter:
                     task_type, param1, _ = future_to_task[future]
                     try:
@@ -246,6 +257,14 @@ class NewsFetcher:
     
     def _fetch_website_with_retry(self, name: str) -> List[NewsItem]:
         return self._retry(self._fetch_website, name)
+    
+    def _fetch_domestic_with_retry(self, domestic_cfg: dict) -> List[NewsItem]:
+        return self._retry(self._fetch_domestic, domestic_cfg)
+    
+    def _fetch_domestic(self, domestic_cfg: dict) -> List[NewsItem]:
+        """国内新闻源（知乎热榜/微博热搜/36kr/量子位/机器之心/虎嗅/百度）"""
+        from src.domestic_news import fetch_all_domestic
+        return fetch_all_domestic(domestic_cfg)
     
     def _retry(self, func, *args, **kwargs) -> List[NewsItem]:
         last_error = None

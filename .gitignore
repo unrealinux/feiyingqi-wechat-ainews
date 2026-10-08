@@ -55,6 +55,7 @@ cover.png
 
 # Temp files
 nul
+*.bak
 
 # Output files
 output/*.html
@@ -85,3 +86,6 @@ output/_draftcount.txt
 # OS
 .DS_Store
 Thumbs.db
+
+# 贴图号生成的成图（产物，不入库）
+output/tietu/

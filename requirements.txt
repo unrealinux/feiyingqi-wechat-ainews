@@ -19,6 +19,9 @@ lxml>=4.9.0
 # Environment
 python-dotenv>=1.0.0
 
+# Timezone database for zoneinfo (Windows ships no IANA tzdata)
+tzdata>=2024.1
+
 # Testing
 pytest>=7.0.0
 

@@ -336,6 +336,96 @@ class WeChatPublisher:
                 self._health_checker.inc_publish_failure()
             return None
     
+    def create_image_draft(self, title: str, content: str, image_paths: List[str],
+                           need_open_comment: int = 1,
+                           only_fans_can_comment: int = 0) -> Optional[str]:
+        """创建「图片消息」草稿（贴图号形式，不群发）。
+
+        贴图号 = 微信图片消息（article_type=newspic）：多张图 + 一段短文案。
+        每张图先传永久素材拿 media_id，再整体建草稿。
+        上限 20 张图；title 最长 64 字。
+        """
+        _assert_not_in_test_context("create_image_draft（创建图片消息草稿）")
+        token = self.get_access_token()
+        if not token:
+            logger.error("无法获取 access_token，图片草稿中止")
+            return None
+        if not image_paths:
+            logger.error("图片消息至少需要 1 张图")
+            return None
+        if len(image_paths) > 20:
+            logger.error(f"图片消息最多 20 张图，当前 {len(image_paths)} 张")
+            return None
+
+        image_list = []
+        for p in image_paths:
+            if not os.path.exists(p):
+                logger.error(f"图片不存在，草稿中止: {p}")
+                return None
+            mid = self._upload_media_with_backoff(p)
+            if not mid:
+                logger.error(f"图片上传失败，草稿中止: {p}")
+                return None
+            image_list.append({"image_media_id": mid})
+            # 永久素材接口有频控，连传多张会被断链（RemoteDisconnected）
+            time.sleep(2)
+
+        article = {
+            "article_type": "newspic",
+            "title": self._clean_emoji(title)[:64],
+            "content": self._clean_emoji(content),
+            "need_open_comment": need_open_comment,
+            "only_fans_can_comment": only_fans_can_comment,
+            "image_info": {"image_list": image_list},
+        }
+
+        url = "https://api.weixin.qq.com/cgi-bin/draft/add"
+        params = {"access_token": token}
+
+        @with_retry(max_retries=2, delay=2.0)
+        def _create():
+            proxies = self.proxies if self.use_proxy else {}
+            body = json.dumps({"articles": [article]}, ensure_ascii=False).encode("utf-8")
+            headers = {"Content-Type": "application/json; charset=utf-8"}
+            response = requests.post(url, params=params, data=body,
+                                     headers=headers, timeout=30, proxies=proxies)
+            data = response.json()
+            if "media_id" in data:
+                return data["media_id"]
+            raise AppError(
+                f"创建图片草稿失败: {data.get('errmsg', data)}",
+                error_type=ErrorType.SYSTEM,
+                context={"error_code": data.get("errcode", -1)},
+            )
+
+        try:
+            media_id = _create()
+            logger.info(f"图片草稿已创建: {media_id}")
+            if self._health_checker:
+                self._health_checker.inc_published()
+            return media_id
+        except Exception as e:
+            logger.error(f"创建图片草稿异常: {e}")
+            if self._health_checker:
+                self._health_checker.inc_publish_failure()
+            return None
+
+    def _upload_media_with_backoff(self, file_path: str, attempts: int = 4) -> Optional[str]:
+        """上传单张永久素材，对 ConnectError / RemoteDisconnected 退避重试。
+
+        微信「新增永久素材」有频控，连续快速上传会被服务端直接断开连接。
+        """
+        delay = 3.0
+        for i in range(1, attempts + 1):
+            mid = self._upload_media(file_path, "image")
+            if mid:
+                return mid
+            if i < attempts:
+                logger.warning(f"第 {i} 次上传失败，{delay:.0f}s 后重试: {file_path}")
+                time.sleep(delay)
+                delay *= 2
+        return None
+
     def update_draft_cover(self, media_id: str, thumb_media_id: str) -> bool:
         """更新草稿封面图"""
         _assert_not_in_test_context("update_draft_cover（改草稿）")
