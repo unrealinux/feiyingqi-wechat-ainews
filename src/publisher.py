@@ -15,11 +15,14 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional, List
 
+from src.ai_score import check_ai_score, DEFAULT_THRESHOLD
 from src.config import load_config, get_wechat_config, get_publish_config
 from src.proxy import get_requests_proxy, is_proxy_enabled
 from src.validate_config import validate_config, ValidationErrorType
 from src.errors import with_retry, AppError, ErrorType
 from src.health import inc_published, inc_publish_failure
+from src.monitoring import record_ai_score
+from src.utils import html_to_text
 
 logging.basicConfig(
     level=logging.INFO,
@@ -838,13 +841,29 @@ def publish_article(title: str, content: str, author: str = "",
                     digest: str = "", cover_path: str = "",
                     auto_publish: bool = False, 
                     export_html: bool = True,
-                    content_is_html: bool = False) -> bool:
+                    content_is_html: bool = False,
+                    ai_threshold: float = DEFAULT_THRESHOLD) -> bool:
     """发布文章
 
     Args:
         content_is_html: content 是否已是渲染好的微信 HTML（如 editorial_template 产出），
             为 True 时跳过 Markdown 转换。
+        ai_threshold: AI 味分数上限，超过即拒绝发布（AGENTS.md：低质内容会触发
+            平台降权）。检测逻辑来自 Easel 的 src/ai_score.py。
     """
+    # 所有发布路径（scheduler / main / unified_publisher）都汇到这里，门禁放这里才拦得住。
+    # content_is_html 时先剥标签：HTML 会稀释句长/标点分析，把 AI 味洗白。
+    gate_text = html_to_text(content) if content_is_html else content
+    passed, report = check_ai_score(gate_text, threshold=ai_threshold)
+    record_ai_score("publish_gate", title, report, ai_threshold, passed)
+    if not passed:
+        logger.error(
+            f"AI 味门禁拒绝发布：{report['total_score']}/{ai_threshold} "
+            f"套话={report['hit_phrases']} 高频词={report['hit_vocab']}。"
+            "请按 docs/anti-ai-checklist.md 改写后重试。"
+        )
+        return False
+
     publisher = WeChatPublisher()
     html_content = content if content_is_html else publisher.markdown_to_html(content)
     

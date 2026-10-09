@@ -15,6 +15,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
+from src.ai_score import check_ai_score, DEFAULT_THRESHOLD
 from src.config import load_config, get_wechat_config
 
 logger = logging.getLogger(__name__)
@@ -36,7 +37,8 @@ class UnifiedPublisher:
                 cover_image: Optional[str] = None,
                 use_ai_cover: bool = False,
                 use_proxy: bool = False,
-                auto_publish: bool = False) -> dict:
+                auto_publish: bool = False,
+                ai_threshold: float = DEFAULT_THRESHOLD) -> dict:
         """
         统一发布接口
         
@@ -53,10 +55,33 @@ class UnifiedPublisher:
             use_ai_cover: 是否使用AI生成封面
             use_proxy: 是否使用代理
             auto_publish: 是否自动发布（vs保存为草稿）
-        
+            ai_threshold: AI 味分数上限，超过即拒绝发布（AGENTS.md：低质模板化
+                内容会触发平台降权）。检测逻辑来自 Easel 的 src/ai_score.py
+
         Returns:
             dict: 发布结果
         """
+        # AGENTS.md 红线：低质/AI 味内容 = 平台降权。发布前过一遍启发式门禁。
+        passed, report = check_ai_score(content, threshold=ai_threshold)
+        if not passed:
+            logger.warning(
+                f"AI 味门禁拒绝发布：{report['total_score']}/{ai_threshold} "
+                f"套话={report['hit_phrases']} 高频词={report['hit_vocab']}"
+            )
+            return {
+                "success": False,
+                "mode": mode,
+                "title": title,
+                "timestamp": datetime.now().isoformat(),
+                "files": [],
+                "ai_score": report,
+                "error": (
+                    f"AI 味过重（{report['total_score']} >= {ai_threshold}），已拒绝发布。"
+                    "请按 docs/anti-ai-checklist.md 改写后重试。"
+                ),
+            }
+        logger.info(f"AI 味门禁通过：{report['total_score']}/{ai_threshold}")
+
         result = {
             "success": False,
             "mode": mode,

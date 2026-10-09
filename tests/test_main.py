@@ -166,6 +166,73 @@ class TestScheduler(unittest.TestCase):
         self.assertFalse(result)
         self.assertFalse(m_publish.called, "LLM 不可用时不得进入发布步骤")
 
+    def test_run_once_notifies_when_nothing_gets_published(self):
+        """AI 味门禁/LLM 失败导致当天没稿时必须发告警，不能只写日志。"""
+        from unittest.mock import patch, MagicMock
+        from src.scheduler import run_once
+        from src.summarizer import LLMUnavailableError
+
+        with patch("src.fetcher.fetch_news", return_value=[MagicMock()]), \
+             patch("src.summarizer.Summarizer.generate_editorial_spec",
+                   side_effect=LLMUnavailableError("AI 味过重（56.0 >= 45.0）")), \
+             patch("src.publisher.publish_article") as m_publish, \
+             patch("src.monitoring.send_run_notification") as m_notify:
+            result = run_once()
+
+        self.assertFalse(result)
+        self.assertFalse(m_publish.called)
+        m_notify.assert_called_once()
+        status, details = m_notify.call_args.args
+        self.assertEqual(status, "error")
+        self.assertIn("AI 味", details["error"])
+
+    def test_run_once_refetches_when_material_is_too_thin(self):
+        """素材太薄时应该补抓素材重试一次，而不是把同一份素材反复重写。"""
+        from unittest.mock import patch, MagicMock
+        from src.scheduler import run_once
+        from src.summarizer import ThinMaterialError
+
+        def _first_thin_then_ok(_items, **_kw):
+            if _first_thin_then_ok.calls == 0:
+                _first_thin_then_ok.calls += 1
+                raise ThinMaterialError("两稿都被判 AI 味过重")
+            return {"title": "重试成功的标题"}
+
+        _first_thin_then_ok.calls = 0
+        extra_item = MagicMock()
+
+        with patch("src.fetcher.fetch_news", return_value=[extra_item]) as m_fetch, \
+             patch("src.summarizer.Summarizer.generate_editorial_spec",
+                   side_effect=_first_thin_then_ok) as m_llm, \
+             patch("src.editorial_template.draft_title", return_value="单元测试标题"), \
+             patch("src.editorial_template.render", return_value="<p>正文</p>"), \
+             patch("src.ai_photo_cover.generate_ai_photo_cover", return_value=(None, None)), \
+             patch("src.cover_generator.generate_gradient_cover", return_value=None), \
+             patch("src.publisher.publish_article", return_value=True) as m_publish:
+            result = run_once()
+
+        self.assertTrue(result)
+        self.assertEqual(m_llm.call_count, 2, "素材太薄应重试一次")
+        self.assertGreaterEqual(m_fetch.call_count, 2, "重试前应补抓素材")
+        self.assertTrue(m_publish.called)
+
+    def test_refetch_more_merges_without_dropping_original(self):
+        """补抓只增不减，且按 URL 去重；补抓失败不能把原有素材弄丢。"""
+        from unittest.mock import patch
+        from src.scheduler import _refetch_more
+        from src.fetcher import NewsItem
+
+        original = [NewsItem("旧闻", "https://a.com")]
+
+        with patch("src.fetcher.fetch_news",
+                   return_value=[NewsItem("旧闻", "https://a.com"),
+                                 NewsItem("新出现", "https://b.com")]):
+            merged = _refetch_more(original)
+        self.assertEqual([i.url for i in merged], ["https://a.com", "https://b.com"])
+
+        with patch("src.fetcher.fetch_news", side_effect=RuntimeError("断网")):
+            self.assertEqual(_refetch_more(original)[0].url, "https://a.com")
+
 
 class TestDeduplication(unittest.TestCase):
     """测试去重功能"""

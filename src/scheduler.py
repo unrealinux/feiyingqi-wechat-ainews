@@ -22,6 +22,44 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
+def _refetch_more(current: list, limit: int = 30) -> list:
+    """再抓一轮素材并与原素材合并（只增不减，按 URL/标题去重）。
+
+    用于"素材太薄"：模型写不出人味往往是因为素材里没数字可写，多给一份素材
+    比把同一份重写第三次有用。补抓失败就维持原样，不因此中断流水线。
+    """
+    from src.fetcher import fetch_news
+
+    try:
+        fresh = fetch_news()
+    except Exception as e:
+        logger.warning(f"补抓素材失败，沿用原有素材: {e}")
+        return current
+
+    seen = {item.url or item.title for item in current}
+    merged = list(current)
+    for item in fresh:
+        key = item.url or item.title
+        if key and key not in seen:
+            seen.add(key)
+            merged.append(item)
+    return merged[:limit]
+
+
+def _notify_failure(reason: str) -> None:
+    """失败要有声音。定时任务跑在后台，日志没人看；
+
+    AI 味门禁/LLM 失败都会让当天"没稿"，不说一声就和网络挂掉分不出来。
+    复用已有的监控通道（未配置 webhook 时是 no-op），且通知本身出错不得影响主流程。
+    """
+    try:
+        from src.monitoring import record_alert, send_run_notification
+        send_run_notification("error", {"error": reason})
+        record_alert(reason)
+    except Exception as e:
+        logger.warning(f"失败通知发送失败（不影响主流程）: {e}")
+
+
 class Scheduler:
     """定时任务调度器"""
     
@@ -119,7 +157,7 @@ def start_scheduler(task_func: Callable):
 def run_once() -> bool:
     """运行一次完整流程：抓新闻 → LLM 产出结构化内容 → 固定排版渲染 → 写草稿。"""
     from src.fetcher import fetch_news, get_mock_news
-    from src.summarizer import Summarizer
+    from src.summarizer import Summarizer, ThinMaterialError
     from src.publisher import publish_article
     from src import editorial_template
     
@@ -141,7 +179,16 @@ def run_once() -> bool:
         
         logger.info("\n[2/4] Generating structured content with AI...")
         # allow_mock=False：LLM 欠费/掉线时宁可本次失败，也不生成 mock 拼贴稿
-        spec = Summarizer().generate_editorial_spec(news_items, allow_mock=False)
+        summarizer = Summarizer()
+        for material_attempt in (1, 2):
+            try:
+                spec = summarizer.generate_editorial_spec(news_items, allow_mock=False)
+                break
+            except ThinMaterialError as e:
+                if material_attempt == 2:
+                    raise
+                logger.warning(f"素材太薄（{e}），补抓一批素材后重试")
+                news_items = _refetch_more(news_items)
         title = editorial_template.draft_title(spec)
         logger.info(f"Title: {title}")
 
@@ -185,6 +232,7 @@ def run_once() -> bool:
             logger.info("\nLogin to mp.weixin.qq.com to publish")
         else:
             logger.error("Failed to publish article")
+            _notify_failure("发布步骤返回失败（可能是 AI 味门禁拦截，详见上文日志）")
         logger.info(f"Total time: {elapsed:.1f}s")
         logger.info("="*50)
         
@@ -193,6 +241,7 @@ def run_once() -> bool:
     except Exception as e:
         logger.error(f"Error in run_once: {e}", exc_info=True)
         logger.error("本次不创建草稿。修复后重跑：python main.py daily")
+        _notify_failure(str(e))
         return False
 
 

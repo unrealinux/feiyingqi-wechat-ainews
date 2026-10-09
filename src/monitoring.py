@@ -16,6 +16,89 @@ from pathlib import Path
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# 本地观测文件：不依赖任何外部 webhook（当前 FEISHU/SLACK/DINGTALK 都没配，
+# 告警默认发不出去）。写文件是零配置、事后可查的那一层。
+AI_GATE_LOG = Path("logs/ai_gate.jsonl")
+ALERT_LOG = Path("logs/alerts.jsonl")
+
+
+def _append_jsonl(path: Path, record: Dict) -> None:
+    """追加一行 JSON。观测不能反过来搞挂主流程，所以任何异常都只记 warning。"""
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with open(path, "a", encoding="utf-8") as f:
+            f.write(json.dumps(record, ensure_ascii=False) + "\n")
+    except Exception as e:
+        logger.warning(f"写入 {path} 失败（不影响主流程）: {e}")
+
+
+def record_ai_score(source: str, title: str, report: Dict,
+                    threshold: float, passed: bool) -> None:
+    """记录每次 AI 味打分。
+
+    threshold=45 是 Easel 拍的默认值，本仓库没有依据。攒够真实分布后用
+    scripts/ai_gate_report.py 看拦截率和分位数，再决定该不该调。
+    """
+    _append_jsonl(AI_GATE_LOG, {
+        "time": datetime.now().isoformat(timespec="seconds"),
+        "source": source,
+        "title": title[:80],
+        "score": report.get("total_score"),
+        "threshold": threshold,
+        "passed": passed,
+        "hit_phrases": report.get("hit_phrases", []),
+        "hit_vocab": report.get("hit_vocab", []),
+    })
+
+
+def read_ai_scores(path: Optional[Path] = None) -> List[Dict]:
+    """读回历史打分记录（文件不存在/单行损坏都不报错）。"""
+    path = path or AI_GATE_LOG
+    if not path.exists():
+        return []
+    records = []
+    for line in path.read_text(encoding="utf-8").splitlines():
+        try:
+            records.append(json.loads(line))
+        except json.JSONDecodeError:
+            continue
+    return records
+
+
+def summarize_ai_scores(records: List[Dict]) -> Dict:
+    """给阈值决策用的汇总：拦截率 / 分位数 / 最常命中的词。"""
+    scores = sorted(r["score"] for r in records if isinstance(r.get("score"), (int, float)))
+    blocked = [r for r in records if not r.get("passed", True)]
+    hits: Dict[str, int] = {}
+    for r in blocked:
+        for word in list(r.get("hit_phrases", [])) + list(r.get("hit_vocab", [])):
+            hits[word] = hits.get(word, 0) + 1
+    return {
+        "total": len(records),
+        "blocked": len(blocked),
+        "block_rate": round(len(blocked) / len(records), 3) if records else 0.0,
+        "p50": _percentile(scores, 50),
+        "p90": _percentile(scores, 90),
+        "p99": _percentile(scores, 99),
+        "top_hits": sorted(hits.items(), key=lambda kv: -kv[1])[:10],
+    }
+
+
+def _percentile(sorted_values: List[float], pct: float) -> Optional[float]:
+    if not sorted_values:
+        return None
+    idx = min(len(sorted_values) - 1, int(round((pct / 100) * (len(sorted_values) - 1))))
+    return round(float(sorted_values[idx]), 1)
+
+
+def record_alert(reason: str) -> None:
+    """本地告警底账：webhook 没配时，这是唯一能事后查到"今天为什么没稿"的地方。"""
+    _append_jsonl(ALERT_LOG, {
+        "time": datetime.now().isoformat(timespec="seconds"),
+        "reason": reason[:500],
+    })
+    logger.error(f"[ALERT] 今日未产出：{reason}")
+
 
 class NotificationChannel(ABC):
     """通知渠道基类"""

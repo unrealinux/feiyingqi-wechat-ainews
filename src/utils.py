@@ -1,7 +1,17 @@
 import os
 import re
+import html
 from datetime import datetime
 from pathlib import Path
+
+
+def html_to_text(markup: str) -> str:
+    """剥掉 HTML 标签，给需要纯文本的分析用（如 AI 味打分）。
+
+    editorial 模板产出的是全 inline style 的 HTML，标签会干扰句长/标点分析。
+    """
+    stripped = re.sub(r"<(script|style)[^>]*>.*?</\1>", " ", markup, flags=re.S | re.I)
+    return html.unescape(re.sub(r"<[^>]+>", " ", stripped))
 
 
 def ensure_dir(path: str) -> Path:
