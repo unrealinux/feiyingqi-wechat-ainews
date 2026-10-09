@@ -232,7 +232,11 @@ def run_once() -> bool:
             logger.info("\nLogin to mp.weixin.qq.com to publish")
         else:
             logger.error("Failed to publish article")
-            _notify_failure("发布步骤返回失败（可能是 AI 味门禁拦截，详见上文日志）")
+            # 不猜原因：实测最常见的就是 IP 白名单（invalid ip），其次是门禁/网络
+            _notify_failure(
+                "发布步骤返回失败（详细原因见上文日志；常见：出口 IP 不在白名单 / "
+                "AI 味门禁拦截 / 网络或凭证问题）"
+            )
         logger.info(f"Total time: {elapsed:.1f}s")
         logger.info("="*50)
         
