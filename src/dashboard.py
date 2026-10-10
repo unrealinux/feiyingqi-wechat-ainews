@@ -4,16 +4,13 @@ Web Dashboard - AI News Publisher 管理界面
 使用 Flask 提供简单的 Web 界面
 """
 
-import os
-import json
 import logging
 from datetime import datetime
 from pathlib import Path
-from flask import Flask, render_template_string, send_file, jsonify, request
+from flask import Flask, render_template_string, send_file, jsonify
 
 from src.config import load_config
 from src.scheduler import run_once
-from src.fetcher import fetch_news, get_mock_news
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)

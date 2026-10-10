@@ -9,8 +9,7 @@ import signal
 import sys
 import logging
 from datetime import datetime, timedelta
-from typing import Callable, Optional
-from pathlib import Path
+from typing import Callable
 
 from src.config import load_config, get_scheduler_config
 
@@ -127,7 +126,7 @@ class Scheduler:
             wait_seconds = (target - now).total_seconds()
             next_run = target.strftime("%Y-%m-%d %H:%M:%S")
 
-            logger.info(f"Next run: {next_run} (in {int(wait_seconds/60)} minutes)")
+            logger.info(f"Next run: {next_run} (in {int(wait_seconds / 60)} minutes)")
             logger.info("Press Ctrl+C to stop")
 
             time.sleep(wait_seconds)

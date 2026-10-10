@@ -201,7 +201,7 @@ def show_config():
 
         # 微信配置
         wechat = config.get("wechat", {})
-        print(f"\n📱 微信公众号:")
+        print("\n📱 微信公众号:")
         print(
             f"   AppID: {'✅ 已配置' if wechat.get('app_id') and wechat['app_id'] != 'your_app_id_here' else '❌ 未配置'}"
         )
@@ -212,7 +212,7 @@ def show_config():
         # LLM配置
         llm = config.get("llm", {})
         provider = llm.get("provider", "auto")
-        print(f"\n🤖 LLM 配置:")
+        print("\n🤖 LLM 配置:")
         print(f"   提供商: {provider}")
 
         # OpenAI
@@ -231,7 +231,7 @@ def show_config():
 
         # 新闻源
         news = config.get("news", {})
-        print(f"\n📰 新闻源:")
+        print("\n📰 新闻源:")
         sources = news.get("sources", {})
         for source, enabled in sources.items():
             status = "✅" if enabled else "❌"
@@ -239,7 +239,7 @@ def show_config():
 
         # 定时任务
         scheduler = config.get("scheduler", {})
-        print(f"\n⏰ 定时任务:")
+        print("\n⏰ 定时任务:")
         print(f"   启用: {'✅ 是' if scheduler.get('enabled') else '❌ 否'}")
         print(f"   时间: {scheduler.get('time', '08:00')}")
 
@@ -251,7 +251,6 @@ def show_config():
 
 def run_once(args=None):
     """运行一次完整流程"""
-    from src.scheduler import run_once as scheduler_run_once
     from src.unified_publisher import publish_article_unified
     from src.fetcher import fetch_news
     from src.summarizer import generate_article
@@ -315,7 +314,7 @@ def run_once(args=None):
         print("\n" + "=" * 50)
         if result["success"]:
             print("✅ 运行完成！")
-            print(f"   保存的文件:")
+            print("   保存的文件:")
             for f in result["files"]:
                 print(f"   - {f}")
         else:
@@ -407,7 +406,7 @@ def publish_article(mode="complete"):
     result = publisher.publish(title=title, content=content, mode=mode)
 
     if result["success"]:
-        print(f"\n✅ 发布成功!")
+        print("\n✅ 发布成功!")
         if result.get("message"):
             print(f"   {result['message']}")
     else:
@@ -422,7 +421,7 @@ def generate_cover(title=None, use_ai=False):
         today = datetime.now().strftime("%Y年%m月%d日")
         title = f"{today} AI 资讯日报"
 
-    print(f"\n🎨 生成封面图...")
+    print("\n🎨 生成封面图...")
     print(f"   标题: {title}")
     print(f"   AI模式: {'✅ 启用' if use_ai else '❌ 禁用'}")
 
@@ -623,7 +622,7 @@ def run_mock_mode():
     result = publish_article_unified(title=title, content=article, mode="simple")
 
     if result["success"]:
-        print(f"\n✅ 运行完成!")
+        print("\n✅ 运行完成!")
         for f in result["files"]:
             print(f"   - {f}")
     else:
@@ -632,7 +631,7 @@ def run_mock_mode():
 
 def run_custom_article(args=None):
     """生成自定义文章"""
-    from src.custom_article import generate_custom_article, CustomArticleGenerator
+    from src.custom_article import generate_custom_article
     from src.publisher import publish_article
 
     print("\n" + "=" * 50)
@@ -688,7 +687,7 @@ def run_custom_article(args=None):
         # 4. 发布或保存本地
         if "--publish" in sys.argv:
             # 发布到微信草稿箱
-            print(f"\n[STEP 3/3] 发布到微信草稿箱...")
+            print("\n[STEP 3/3] 发布到微信草稿箱...")
 
             # 生成封面图
             print("   生成封面图...")
@@ -710,7 +709,7 @@ def run_custom_article(args=None):
                 print("   [ERROR] 发布到微信草稿箱失败")
         else:
             # 仅保存到本地
-            print(f"\n[STEP 3/3] 保存文章到本地...")
+            print("\n[STEP 3/3] 保存文章到本地...")
             from pathlib import Path
 
             output_dir = Path("output")

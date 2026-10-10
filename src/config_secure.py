@@ -5,10 +5,9 @@ Config Loader - 安全配置管理
 """
 
 import os
-import json
 import logging
 from pathlib import Path
-from typing import Any, Optional, Dict
+from typing import Any, Dict
 from dotenv import load_dotenv
 
 logging.basicConfig(level=logging.INFO)

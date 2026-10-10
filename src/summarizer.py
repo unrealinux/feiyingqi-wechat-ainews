@@ -531,7 +531,7 @@ def generate_article(
 
 
 if __name__ == "__main__":
-    from src.fetcher import fetch_news, get_mock_news
+    from src.fetcher import get_mock_news
 
     print("Testing summarizer with mock data...")
     mock_news = get_mock_news(5)

@@ -6,7 +6,6 @@ Health Check Module - 健康检查与系统监控
 """
 
 import os
-import sys
 import time
 import psutil
 import platform
@@ -404,8 +403,8 @@ class HealthChecker:
 
         print("\n📉 失败率:")
         failure_rates = metrics["failure_rates"]
-        print(f"  获取失败率: {failure_rates['fetch']*100:.1f}%")
-        print(f"  发布失败率: {failure_rates['publish']*100:.1f}%")
+        print(f"  获取失败率: {failure_rates['fetch'] * 100:.1f}%")
+        print(f"  发布失败率: {failure_rates['publish'] * 100:.1f}%")
 
         print("\n⏰ 最后活动时间:")
         last_activity = metrics["last_activity"]

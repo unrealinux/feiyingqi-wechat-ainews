@@ -6,20 +6,17 @@ AI News Fetcher - 高性能新闻获取模块
 """
 
 import os
-import json
 import hashlib
 import logging
 from datetime import datetime, timedelta
-from typing import List, Dict, Optional, Tuple
+from typing import List, Optional
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import time
 
 from src.config import load_config, get_news_config
 from src.proxy import get_requests_proxy, is_proxy_enabled
-from src.errors import with_retry, create_app_error, AppError, ErrorType
-from src.health import inc_fetched, inc_fetch_failure
-from src.mock_data import is_mock_mode_enabled, generate_mock_news, MockNewsItem
+from src.mock_data import is_mock_mode_enabled, generate_mock_news
 
 logging.basicConfig(
     level=logging.INFO,

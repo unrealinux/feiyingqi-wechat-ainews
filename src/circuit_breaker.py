@@ -5,10 +5,9 @@ Circuit Breaker - 熔断器模式实现
 
 import time
 import threading
-import logging
-from typing import Callable, Any, Optional
+from typing import Callable, Any
 from enum import Enum
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from functools import wraps
 
 from src.logger import get_logger
@@ -109,7 +108,7 @@ class CircuitBreaker:
             # 排除的异常不计入熔断
             raise
 
-        except Exception as e:
+        except Exception:
             self._on_failure()
             raise
 
@@ -185,8 +184,6 @@ class CircuitBreaker:
 
 class CircuitBreakerOpenError(Exception):
     """熔断器开启异常"""
-
-    pass
 
 
 def circuit_breaker(

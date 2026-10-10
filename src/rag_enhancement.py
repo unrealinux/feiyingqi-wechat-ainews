@@ -4,11 +4,10 @@ RAG Enhancement - 检索增强生成
 使用历史文章和知识库增强 AI 摘要质量
 """
 
-import os
 import json
 import logging
-from typing import List, Dict, Optional
-from datetime import datetime, timedelta
+from typing import List, Dict
+from datetime import datetime
 from pathlib import Path
 
 logging.basicConfig(level=logging.INFO)
@@ -271,11 +270,11 @@ def quick_test():
     )
 
     results = kb.find_related("OpenAI GPT model")
-    print(f"\nSearch results for 'OpenAI GPT model':")
+    print("\nSearch results for 'OpenAI GPT model':")
     for r in results:
         print(f"  - {r['title']} (relevance: {r['relevance']})")
 
-    enhancer = RAGEnhancer()
+    RAGEnhancer()
     print("\nRAG Enhancer initialized")
 
 

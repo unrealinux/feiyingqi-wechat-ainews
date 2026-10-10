@@ -428,7 +428,7 @@ def _pretty_print(report: dict):
     for name, d in report["dimensions"].items():
         w = weights.get(name, 0)
         suffix = "  [跳过]" if w == 0 else ""
-        print(f"  [{name:13s}] 分数={d['score']:>5}  权重={int(w*100)}%{suffix}")
+        print(f"  [{name:13s}] 分数={d['score']:>5}  权重={int(w * 100)}%{suffix}")
         det = d["detail"]
         if name == "phrases" and det.get("hit_count"):
             print(f"      命中 {det['hit_count']} 次 AI 套话:")

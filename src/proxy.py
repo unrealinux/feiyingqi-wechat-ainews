@@ -7,7 +7,7 @@ Proxy Support Module - 代理支持模块
 
 import os
 import asyncio
-from typing import Dict, Optional, Any
+from typing import Dict, Optional
 from urllib.parse import urlparse
 from dataclasses import dataclass
 

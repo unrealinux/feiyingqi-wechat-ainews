@@ -12,7 +12,6 @@ AI Cover Generator - 基于 FeiqingqiWechatMP 的 ai-image-generator.js 实现
 
 import os
 import sys
-import json
 import base64
 import requests
 from typing import Optional, Dict, Tuple

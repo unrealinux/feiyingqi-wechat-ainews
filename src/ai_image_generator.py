@@ -13,10 +13,9 @@ AI图片生成API支持模块
 6. Stability AI Stable Diffusion (国际)
 """
 
-import os
 import base64
 import requests
-from typing import Optional, Dict, Any
+from typing import Optional, Dict
 from pathlib import Path
 
 
@@ -393,7 +392,7 @@ Professional interior photography.""",
                         return None
 
                 time.sleep(2)
-                print(f"[Waiting] 等待百度生成结果... ({i+1}/{max_retries})")
+                print(f"[Waiting] 等待百度生成结果... ({i + 1}/{max_retries})")
 
             except Exception as e:
                 print(f"[Error] 轮询百度结果失败: {e}")

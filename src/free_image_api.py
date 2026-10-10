@@ -11,7 +11,7 @@
 
 import os
 import requests
-from typing import Optional, List, Dict
+from typing import Optional, Dict
 from pathlib import Path
 
 
@@ -444,7 +444,6 @@ def add_text_overlay(image_path: str, title: str, date: str = None):
             font_date = font_title
 
         # 创建半透明遮罩
-        from PIL import ImageFilter
 
         # 添加底部渐变遮罩
         overlay = Image.new("RGBA", img.size, (0, 0, 0, 0))

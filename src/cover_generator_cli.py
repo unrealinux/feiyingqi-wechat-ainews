@@ -4,7 +4,7 @@ Cover Generator CLI - 封面图生成命令行工具
 
 import argparse
 import sys
-from src.cover_generator import generate_cover_image, CoverGenerator
+from src.cover_generator import generate_cover_image
 
 
 def main():

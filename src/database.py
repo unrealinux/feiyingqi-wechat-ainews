@@ -4,11 +4,9 @@ Database Module - SQLite 数据库支持
 存储文章历史、统计数据、配置等
 """
 
-import os
 import json
 import sqlite3
 import logging
-from datetime import datetime
 from pathlib import Path
 from typing import List, Dict, Optional
 from contextlib import contextmanager

@@ -2,7 +2,6 @@
 Config Hot Reload - 配置热加载模块
 """
 
-import os
 import time
 import hashlib
 import threading
@@ -10,7 +9,7 @@ from pathlib import Path
 from typing import Any, Dict, Optional, Callable
 from dataclasses import dataclass
 from watchdog.observers import Observer
-from watchdog.events import FileSystemEventHandler, FileModifiedEvent
+from watchdog.events import FileSystemEventHandler
 
 from src.logger import get_logger
 

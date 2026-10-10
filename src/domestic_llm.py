@@ -6,7 +6,7 @@ Domestic LLM Providers - 国内 LLM 提供商
 
 import os
 import logging
-from typing import Optional, Dict
+from typing import Optional
 from abc import ABC, abstractmethod
 
 logging.basicConfig(level=logging.INFO)

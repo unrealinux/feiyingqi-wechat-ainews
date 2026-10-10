@@ -7,7 +7,7 @@ Configuration Validator - 配置验证模块
 
 import os
 import re
-from typing import Dict, List, Any, Optional
+from typing import Dict, List, Any
 from urllib.parse import urlparse
 from dataclasses import dataclass
 from enum import Enum

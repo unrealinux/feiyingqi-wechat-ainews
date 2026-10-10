@@ -6,7 +6,7 @@ Analytics Module - 数据分析模块
 
 import json
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional
 from collections import Counter

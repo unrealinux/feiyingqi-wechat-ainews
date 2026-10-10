@@ -4,24 +4,13 @@ Enhanced Web Dashboard - 增强版管理界面
 包含图表统计、更好的 UI 设计
 """
 
-import os
 import json
 import logging
-from datetime import datetime, timedelta
-from pathlib import Path
 from flask import (
     Flask,
     render_template_string,
-    send_file,
-    jsonify,
-    request,
-    redirect,
-    url_for,
 )
 
-from src.config import load_config
-from src.scheduler import run_once
-from src.fetcher import fetch_news, get_mock_news
 from src.database import get_db
 
 logging.basicConfig(level=logging.INFO)
@@ -303,7 +292,7 @@ def articles_page():
 @app.route("/config")
 def config_page():
     """配置页面"""
-    from src.config_secure import print_config_status, validate_config, load_env
+    from src.config_secure import validate_config, load_env
 
     load_env()
 

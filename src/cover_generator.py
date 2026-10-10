@@ -272,13 +272,11 @@ class CoverGenerator:
 
     def _draw_neural_background(self, draw, colors: dict):
         """神经网络背景"""
-        bg_color = colors["bg"]
         accent = colors["accent"]
         highlight = colors["highlight"]
 
         # 基础渐变
         for i in range(0, self.height, 4):
-            alpha = int(255 * (1 - i / self.height) * 0.15)
             draw.line([(0, i), (self.width, i)], fill=accent)
 
         # 神经网络节点和连线
@@ -522,7 +520,6 @@ class CoverGenerator:
             (text_width + shadow_offset * 2, text_height + shadow_offset * 2),
             (0, 0, 0, 0),
         )
-        shadow_draw = ImageDraw.Draw(shadow_img)
 
         # 创建阴影渐变（使用accent色）
         for i in range(text_height + shadow_offset * 2):
@@ -701,8 +698,6 @@ class CoverGenerator:
             return None
 
         img = Image.new("RGB", (width, height))
-        draw = ImageDraw.Draw(img)
-
         # 转换颜色
         rgb_colors = [self._hex_to_rgb(c) for c in colors]
 
@@ -823,10 +818,10 @@ class CoverGenerator:
             return None
 
         try:
-            import requests
+            pass
 
             prompt = f"""Create a professional WeChat article cover image for AI technology news.
-            
+
 Title: {title}
 Style: Modern tech, dark gradient, professional, minimalist
 Requirements:
@@ -1095,7 +1090,9 @@ def generate_gradient_cover(
     with_text=False 时只出背景（无标题/署名/日期），用作写实封面的降级方案。
     """
     from PIL import Image, ImageDraw, ImageFont
-    import os, random, math
+    import os
+    import random
+    import math
 
     try:
         # 多套高对比配色：深色背景 + 亮色文字 + 强调色

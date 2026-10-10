@@ -4,12 +4,10 @@ REST API - RESTful API 接口
 为外部系统提供 API 接口
 """
 
-import os
-import json
 import logging
 from datetime import datetime
 from functools import wraps
-from flask import Flask, request, jsonify, g
+from flask import Flask, request, jsonify
 from flask_cors import CORS
 
 logging.basicConfig(level=logging.INFO)
@@ -23,7 +21,7 @@ def require_auth(f):
 
     @wraps(f)
     def decorated(*args, **kwargs):
-        from src.config_secure import get_api_config, load_env, get_env
+        from src.config_secure import get_api_config, load_env
 
         load_env()
 
@@ -190,7 +188,6 @@ def get_stats():
 def config_status():
     """配置状态"""
     from src.config_secure import (
-        print_config_status,
         validate_config,
         get_wechat_config,
         get_openai_config,

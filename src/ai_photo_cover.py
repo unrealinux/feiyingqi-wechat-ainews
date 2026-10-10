@@ -12,7 +12,6 @@ AI Photo Cover - 写实风格封面生成
 
 import io
 import logging
-import random
 from datetime import datetime
 from pathlib import Path
 from typing import Optional, Tuple
@@ -366,7 +365,7 @@ def generate_ai_photo_cover(
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_bytes(composed)
     logger.info(
-        f"[封面] 写实封面已生成: {out} ({len(composed)//1024} KB, 主题={theme})"
+        f"[封面] 写实封面已生成: {out} ({len(composed) // 1024} KB, 主题={theme})"
     )
     return str(out), theme
 

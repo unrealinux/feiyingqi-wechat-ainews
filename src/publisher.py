@@ -12,15 +12,13 @@ import logging
 import time
 import requests
 from datetime import datetime
-from pathlib import Path
 from typing import Optional, List
 
 from src.ai_score import check_ai_score, DEFAULT_THRESHOLD
 from src.config import load_config, get_wechat_config, get_publish_config
 from src.proxy import get_requests_proxy, is_proxy_enabled
-from src.validate_config import validate_config, ValidationErrorType
+from src.validate_config import validate_config
 from src.errors import with_retry, AppError, ErrorType
-from src.health import inc_published, inc_publish_failure
 from src.monitoring import record_ai_score
 from src.utils import html_to_text
 
@@ -506,7 +504,7 @@ class WeChatPublisher:
             return None
 
         # 微信草稿箱需要永久素材的media_id，使用material/add_material接口
-        url = f"https://api.weixin.qq.com/cgi-bin/material/add_material"
+        url = "https://api.weixin.qq.com/cgi-bin/material/add_material"
         params = {"access_token": token, "type": media_type}
 
         @with_retry(max_retries=2, delay=1.0)

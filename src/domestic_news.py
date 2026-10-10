@@ -4,14 +4,11 @@ Domestic News Sources - 国内新闻源
 优化国内访问：百度、微博、知乎、36kr、量子位、机器之心等
 """
 
-import os
 import re
-import json
 import logging
 from typing import List, Optional
 from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor, as_completed
-import time
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -138,7 +135,7 @@ def fetch_domestic_news(
             try:
                 items = future.result()
                 results.extend(items)
-            except Exception as e:
+            except Exception:
                 pass
 
     return results
@@ -253,7 +250,6 @@ def get_weibo_hot() -> List:
 
             for item in data.get("data", {}).get("realtime", [])[:15]:
                 word = item.get("word", "")
-                raw_url = item.get("raw_url", "")
 
                 if (
                     word

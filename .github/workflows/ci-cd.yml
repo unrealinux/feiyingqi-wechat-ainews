@@ -65,14 +65,14 @@ jobs:
       - name: Check formatting
         run: black --check src/ main.py
 
-      # 这一步只提示，不阻塞：现状还有约 166 条 flake8 提示（81 个未使用导入、
-      # 34 处空行带空白、8 处裸 except、8 处赋值后未使用的局部变量…）。
-      # 其中裸 except 要逐处判断该收窄成哪种异常，不适合一次性机械改完，
-      # 所以先让它看得见但不拦人，别把一个必然失败的门禁挂在那里。
+      # 这一步只提示，不阻塞。剩下的 52 条都是「不能机械改」的：
+      #   - 44 条 W291/W293（空白）落在**字符串内部**——改了就改了输出内容
+      #   - 8 条 E722 裸 except，要逐处判断该收窄成哪种异常（属于错误处理）
+      # E203（冒号前空格）按 black 官方建议忽略：black 就是那样排切片的。
       - name: Run linters (advisory)
         continue-on-error: true
         run: |
-          flake8 src/ main.py --max-line-length=120 --ignore=E501,W503
+          flake8 src/ main.py --max-line-length=120 --ignore=E501,W503,E203
           mypy src/ --ignore-missing-imports
 
   build:

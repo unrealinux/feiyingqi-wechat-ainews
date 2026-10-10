@@ -5,7 +5,6 @@ DashScope Image Generator - 阿里云图片生成模块
 """
 
 import os
-import json
 import logging
 import requests
 from pathlib import Path
