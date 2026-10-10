@@ -21,7 +21,7 @@ def ensure_dir(path: str) -> Path:
 
 
 def sanitize_filename(name: str) -> str:
-    name = re.sub(r'[<>:"/\\|?*]', '', name)
+    name = re.sub(r'[<>:"/\\|?*]', "", name)
     name = name.strip()
     return name[:255]
 

@@ -4,6 +4,7 @@ AI News Publisher v3.0 - 全网 AI 资讯聚合自动发布工具
 
 统一入口：整合所有功能到一个命令行界面
 """
+
 import sys
 import argparse
 import logging
@@ -21,8 +22,8 @@ for _stream in (sys.stdout, sys.stderr):
 
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s',
-    datefmt='%H:%M:%S'
+    format="%(asctime)s - %(levelname)s - %(message)s",
+    datefmt="%H:%M:%S",
 )
 logger = logging.getLogger(__name__)
 
@@ -66,11 +67,11 @@ def main():
   python main.py test                 运行测试模式
   python main.py validate             验证配置
   python main.py mock                 使用模拟数据运行
-        """
+        """,
     )
-    
+
     subparsers = parser.add_subparsers(dest="command", help="可用命令")
-    
+
     # 主要命令
     run_parser = subparsers.add_parser("run", help="手动运行一次")
     run_parser.add_argument("--cover", action="store_true", help="生成封面图")
@@ -78,21 +79,30 @@ def main():
     run_parser.add_argument("--publish", action="store_true", help="自动发布到微信")
     run_parser.add_argument("--no-llm", action="store_true", help="跳过LLM生成")
     run_parser.add_argument("--mock", action="store_true", help="使用模拟数据")
-    
+
     subparsers.add_parser("fetch", help="仅获取新闻")
     subparsers.add_parser("generate", help="仅生成文章")
     publish_parser = subparsers.add_parser("publish", help="发布最新文章")
-    publish_parser.add_argument("--mode", choices=["simple", "cover", "ai-cover", "complete"],
-                                default="complete", help="发布模式")
+    publish_parser.add_argument(
+        "--mode",
+        choices=["simple", "cover", "ai-cover", "complete"],
+        default="complete",
+        help="发布模式",
+    )
     cover_parser = subparsers.add_parser("cover", help="生成封面图")
     cover_parser.add_argument("--title", help="文章标题")
     cover_parser.add_argument("--ai", action="store_true", help="使用AI生成")
-    
+
     # 服务命令
     subparsers.add_parser("schedule", help="启动定时任务（常驻进程）")
-    daily_parser = subparsers.add_parser("daily", help="按调度配置执行一次（仅建草稿，不群发）")
-    daily_parser.add_argument("--dry-run", action="store_true",
-                              help="只在本地生成 HTML 预览，不创建草稿（发布前审阅）")
+    daily_parser = subparsers.add_parser(
+        "daily", help="按调度配置执行一次（仅建草稿，不群发）"
+    )
+    daily_parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="只在本地生成 HTML 预览，不创建草稿（发布前审阅）",
+    )
     subparsers.add_parser("dashboard", help="启动增强版 Web 界面")
     subparsers.add_parser("dashboard-simple", help="启动简洁版 Web 界面")
     subparsers.add_parser("api", help="启动 REST API")
@@ -102,21 +112,45 @@ def main():
     subparsers.add_parser("health", help="健康检查")
     subparsers.add_parser("validate", help="验证配置")
     subparsers.add_parser("mock", help="使用模拟数据运行")
-    
+
     # 自定义文章命令
     custom_parser = subparsers.add_parser("custom-article", help="生成自定义文章")
-    custom_parser.add_argument("--type", choices=["meeting_tools_review", "image_tools_review", "note_tools_review", "search_tools_review", "code_tools_review", "video_tools_review", "audio_tools_review", "office_tools_review", "design_tools_review", "marketing_tools_review", "data_tools_review", "education_tools_review", "medical_tools_review", "finance_tools_review", "legal_tools_review"], 
-                              default="meeting_tools_review", help="文章类型")
-    custom_parser.add_argument("--publish", action="store_true", help="自动发布到微信草稿箱")
+    custom_parser.add_argument(
+        "--type",
+        choices=[
+            "meeting_tools_review",
+            "image_tools_review",
+            "note_tools_review",
+            "search_tools_review",
+            "code_tools_review",
+            "video_tools_review",
+            "audio_tools_review",
+            "office_tools_review",
+            "design_tools_review",
+            "marketing_tools_review",
+            "data_tools_review",
+            "education_tools_review",
+            "medical_tools_review",
+            "finance_tools_review",
+            "legal_tools_review",
+        ],
+        default="meeting_tools_review",
+        help="文章类型",
+    )
+    custom_parser.add_argument(
+        "--publish", action="store_true", help="自动发布到微信草稿箱"
+    )
     custom_parser.add_argument("--cover", action="store_true", help="生成封面图")
-    custom_parser.add_argument("--ai-cover", action="store_true", help="使用AI生成封面图")
-    
+    custom_parser.add_argument(
+        "--ai-cover", action="store_true", help="使用AI生成封面图"
+    )
+
     args = parser.parse_args()
-    
+
     if not args.command:
         parser.print_help()
         return
-    
+
     # 命令路由
     if args.command == "config":
         show_config()
@@ -158,37 +192,43 @@ def show_config():
     """显示配置状态"""
     try:
         from src.config import load_config
-        
+
         config = load_config()
-        
-        print("\n" + "="*50)
+
+        print("\n" + "=" * 50)
         print("📊 AI News Publisher 配置状态")
-        print("="*50)
-        
+        print("=" * 50)
+
         # 微信配置
         wechat = config.get("wechat", {})
         print(f"\n📱 微信公众号:")
-        print(f"   AppID: {'✅ 已配置' if wechat.get('app_id') and wechat['app_id'] != 'your_app_id_here' else '❌ 未配置'}")
-        print(f"   AppSecret: {'✅ 已配置' if wechat.get('app_secret') and wechat['app_secret'] != 'your_app_secret_here' else '❌ 未配置'}")
-        
+        print(
+            f"   AppID: {'✅ 已配置' if wechat.get('app_id') and wechat['app_id'] != 'your_app_id_here' else '❌ 未配置'}"
+        )
+        print(
+            f"   AppSecret: {'✅ 已配置' if wechat.get('app_secret') and wechat['app_secret'] != 'your_app_secret_here' else '❌ 未配置'}"
+        )
+
         # LLM配置
         llm = config.get("llm", {})
         provider = llm.get("provider", "auto")
         print(f"\n🤖 LLM 配置:")
         print(f"   提供商: {provider}")
-        
+
         # OpenAI
         openai = config.get("openai", {})
-        print(f"   OpenAI: {'✅ 已配置' if openai.get('api_key') and openai['api_key'] != 'your_openai_api_key_here' else '❌ 未配置'}")
-        
+        print(
+            f"   OpenAI: {'✅ 已配置' if openai.get('api_key') and openai['api_key'] != 'your_openai_api_key_here' else '❌ 未配置'}"
+        )
+
         # DeepSeek
         deepseek = config.get("deepseek", {})
         print(f"   DeepSeek: {'✅ 已配置' if deepseek.get('api_key') else '❌ 未配置'}")
-        
+
         # 智谱AI
         zhipu = config.get("zhipu", {})
         print(f"   智谱AI: {'✅ 已配置' if zhipu.get('api_key') else '❌ 未配置'}")
-        
+
         # 新闻源
         news = config.get("news", {})
         print(f"\n📰 新闻源:")
@@ -196,15 +236,15 @@ def show_config():
         for source, enabled in sources.items():
             status = "✅" if enabled else "❌"
             print(f"   {source}: {status}")
-        
+
         # 定时任务
         scheduler = config.get("scheduler", {})
         print(f"\n⏰ 定时任务:")
         print(f"   启用: {'✅ 是' if scheduler.get('enabled') else '❌ 否'}")
         print(f"   时间: {scheduler.get('time', '08:00')}")
-        
-        print("\n" + "="*50)
-        
+
+        print("\n" + "=" * 50)
+
     except Exception as e:
         print(f"❌ 加载配置失败: {e}")
 
@@ -216,13 +256,13 @@ def run_once(args=None):
     from src.fetcher import fetch_news
     from src.summarizer import generate_article
     from src.fetcher import get_mock_news
-    
-    print("\n" + "="*50)
+
+    print("\n" + "=" * 50)
     print("🚀 AI News Publisher - 开始运行")
-    print("="*50)
-    
+    print("=" * 50)
+
     start_time = datetime.now()
-    
+
     try:
         # 1. 获取新闻
         print("\n📰 [1/3] 获取最新AI新闻...")
@@ -235,42 +275,44 @@ def run_once(args=None):
                 print("   ⚠️ 未获取到新闻，使用模拟数据")
                 news_items = get_mock_news(5)
             print(f"   获取到 {len(news_items)} 条新闻")
-        
+
         # 2. 生成文章
         print("\n📝 [2/3] 生成文章...")
         if args and args.no_llm:
-            article_content = "\n\n".join([
-                f"### {item.title}\n{item.description}\n[原文链接]({item.url})"
-                for item in news_items
-            ])
+            article_content = "\n\n".join(
+                [
+                    f"### {item.title}\n{item.description}\n[原文链接]({item.url})"
+                    for item in news_items
+                ]
+            )
             print("   跳过LLM，直接拼接")
         else:
             # allow_mock=False：LLM 不可用时直接失败，不生成 mock 拼贴稿（AGENTS.md）
             article_content = generate_article(news_items, allow_mock=False)
             print(f"   生成完成 ({len(article_content)} 字符)")
-        
+
         # 3. 发布/保存
         print("\n💾 [3/3] 保存文章...")
         today = datetime.now().strftime("%Y年%m月%d日")
         title = f"🎯 {today} AI 资讯日报"
-        
+
         mode = "simple"
         if args:
             if args.ai_cover:
                 mode = "ai_cover"
             elif args.cover:
                 mode = "with_cover"
-        
+
         result = publish_article_unified(
             title=title,
             content=article_content,
             mode=mode,
-            use_ai_cover=args.ai_cover if args else False
+            use_ai_cover=args.ai_cover if args else False,
         )
-        
+
         elapsed = (datetime.now() - start_time).total_seconds()
-        
-        print("\n" + "="*50)
+
+        print("\n" + "=" * 50)
         if result["success"]:
             print("✅ 运行完成！")
             print(f"   保存的文件:")
@@ -281,8 +323,8 @@ def run_once(args=None):
             if result.get("error"):
                 print(f"   错误: {result['error']}")
         print(f"   耗时: {elapsed:.1f}秒")
-        print("="*50)
-        
+        print("=" * 50)
+
     except Exception as e:
         print(f"\n❌ 运行失败: {e}")
         logger.error(f"run_once 失败: {e}", exc_info=True)
@@ -291,10 +333,10 @@ def run_once(args=None):
 def fetch_only():
     """仅获取新闻"""
     from src.fetcher import fetch_news
-    
+
     print("\n📰 获取最新AI新闻...")
     news_items = fetch_news()
-    
+
     if news_items:
         print(f"\n✅ 获取到 {len(news_items)} 条新闻:")
         for i, item in enumerate(news_items[:10], 1):
@@ -312,26 +354,26 @@ def generate_only():
     from src.fetcher import fetch_news
     from src.summarizer import generate_article
     from src.fetcher import get_mock_news
-    
+
     print("\n📰 获取新闻...")
     news_items = fetch_news()
-    
+
     if not news_items:
         print("使用模拟数据")
         news_items = get_mock_news(5)
-    
+
     print(f"   获取到 {len(news_items)} 条")
-    
+
     print("\n📝 生成文章...")
     article = generate_article(news_items)
-    
+
     today = datetime.now().strftime("%Y%m%d")
     output_path = f"output/article_{today}.md"
     Path("output").mkdir(exist_ok=True)
-    
+
     with open(output_path, "w", encoding="utf-8") as f:
         f.write(article)
-    
+
     print(f"\n✅ 文章已生成: {output_path}")
     print(f"   字数: {len(article)} 字符")
 
@@ -339,35 +381,31 @@ def generate_only():
 def publish_article(mode="complete"):
     """发布最新文章"""
     from src.unified_publisher import UnifiedPublisher
-    
+
     print(f"\n📤 发布文章 (模式: {mode})...")
-    
+
     # 查找最新的文章
     output_dir = Path("output")
     articles = list(output_dir.glob("article_*.md"))
-    
+
     if not articles:
         print("❌ 未找到待发布的文章")
         print("   请先运行 python main.py run 生成文章")
         return
-    
+
     latest = max(articles, key=lambda x: x.stat().st_mtime)
     print(f"   发布: {latest.name}")
-    
+
     with open(latest, "r", encoding="utf-8") as f:
         content = f.read()
-    
+
     # 提取标题
     lines = content.split("\n")
     title = lines[0].replace("#", "").strip() if lines else "AI资讯日报"
-    
+
     publisher = UnifiedPublisher()
-    result = publisher.publish(
-        title=title,
-        content=content,
-        mode=mode
-    )
-    
+    result = publisher.publish(title=title, content=content, mode=mode)
+
     if result["success"]:
         print(f"\n✅ 发布成功!")
         if result.get("message"):
@@ -379,24 +417,22 @@ def publish_article(mode="complete"):
 def generate_cover(title=None, use_ai=False):
     """生成封面图"""
     from src.cover_generator import generate_cover_image
-    
+
     if not title:
         today = datetime.now().strftime("%Y年%m月%d日")
         title = f"{today} AI 资讯日报"
-    
+
     print(f"\n🎨 生成封面图...")
     print(f"   标题: {title}")
     print(f"   AI模式: {'✅ 启用' if use_ai else '❌ 禁用'}")
-    
+
     output_path = f"output/cover_{datetime.now().strftime('%Y%m%d')}.png"
-    
+
     try:
         result = generate_cover_image(
-            title=title,
-            output_path=output_path,
-            style="auto"
+            title=title, output_path=output_path, style="auto"
         )
-        
+
         if result:
             print(f"\n✅ 封面图已生成: {result}")
         else:
@@ -408,7 +444,7 @@ def generate_cover(title=None, use_ai=False):
 def run_scheduler():
     """启动定时任务（常驻进程）"""
     from src.scheduler import start_scheduler, run_once
-    
+
     print("\n📅 启动定时任务模式...")
     print("   按 Ctrl+C 停止")
     start_scheduler(run_once)
@@ -425,6 +461,7 @@ def run_daily(dry_run: bool = False):
     """
     if dry_run:
         from src.dry_run import run_local_preview
+
         print("\n📅 [daily] dry-run：只在本地生成预览，不创建草稿...")
         sys.exit(0 if run_local_preview() else 1)
 
@@ -438,6 +475,7 @@ def run_daily(dry_run: bool = False):
 def run_enhanced_dashboard():
     """启动增强版 Web 界面"""
     from src.dashboard_enhanced import start_dashboard
+
     print("\n🎨 启动增强版 Dashboard...")
     print("   Dashboard: http://localhost:5000")
     print("   API: http://localhost:5000/api")
@@ -448,6 +486,7 @@ def run_enhanced_dashboard():
 def run_simple_dashboard():
     """启动简洁版 Web 界面"""
     from src.dashboard import start_dashboard
+
     print("\n📊 启动简洁版 Dashboard...")
     print("   URL: http://localhost:5000")
     print("   按 Ctrl+C 停止")
@@ -457,6 +496,7 @@ def run_simple_dashboard():
 def run_api_server():
     """启动 REST API"""
     from src.api import start_api_server
+
     print("\n🔌 启动 REST API Server...")
     print("   API: http://localhost:5001")
     print("   Docs: http://localhost:5001/")
@@ -467,6 +507,7 @@ def run_api_server():
 def show_analytics():
     """显示统计信息"""
     from src.analytics import show_analytics
+
     show_analytics()
 
 
@@ -475,26 +516,26 @@ def run_test_mode():
     from src.fetcher import fetch_news
     from src.summarizer import generate_article
     from src.fetcher import get_mock_news
-    
+
     print("\n🧪 测试模式")
-    print("="*50)
-    
+    print("=" * 50)
+
     print("\n[1/2] 获取新闻...")
     news_items = fetch_news()
-    
+
     if not news_items:
         print("   未获取到新闻，使用模拟数据")
         news_items = get_mock_news(5)
-    
+
     print(f"   获取到 {len(news_items)} 条新闻")
-    
+
     print("\n[2/2] 生成文章...")
     article = generate_article(news_items)
-    
+
     print(f"\n✅ 文章生成完成 ({len(article)} 字符)")
-    print("\n" + "="*50)
+    print("\n" + "=" * 50)
     print("📄 文章预览 (前2000字符):")
-    print("="*50)
+    print("=" * 50)
     print(article[:2000])
     if len(article) > 2000:
         print(f"\n... 还有 {len(article) - 2000} 字符")
@@ -503,25 +544,25 @@ def run_test_mode():
 def run_health_check():
     """健康检查"""
     from src.health import get_health_checker
-    
+
     print("\n🏥 健康检查")
-    print("="*50)
-    
+    print("=" * 50)
+
     checker = get_health_checker()
     report = checker.get_status_report()
-    
+
     print(f"\n📊 整体状态: {report['status']}")
     print(f"⏰ 检查时间: {report['timestamp']}")
-    
+
     print("\n📋 检查详情:")
-    for name, check in report['checks'].items():
+    for name, check in report["checks"].items():
         status_emoji = {
             "healthy": "✅",
             "degraded": "⚠️",
             "unhealthy": "❌",
-            "unknown": "❓"
+            "unknown": "❓",
         }
-        emoji = status_emoji.get(check['status'], "❓")
+        emoji = status_emoji.get(check["status"], "❓")
         print(f"   {emoji} {name}: {check['message']} ({check['duration_ms']:.1f}ms)")
 
 
@@ -529,27 +570,33 @@ def run_config_validation():
     """验证配置"""
     from src.config import load_config
     from src.validate_config import validate_config
-    
+
     print("\n✅ 配置验证")
-    print("="*50)
-    
+    print("=" * 50)
+
     try:
         config = load_config()
         result = validate_config(config)
-        
-        status = "✅ 通过" if result["valid"] else f"❌ 失败（{result['error_count']} 个错误）"
+
+        status = (
+            "✅ 通过"
+            if result["valid"]
+            else f"❌ 失败（{result['error_count']} 个错误）"
+        )
         print(f"\n📊 验证结果: {status}")
-        
+
         if result["errors"]:
             print("\n❌ 错误详情:")
             for error in result["errors"]:
                 print(f"   [{error.error_type.value}] {error.field}: {error.message}")
-        
+
         if result["warnings"]:
             print(f"\n⚠️ 警告 ({result['warning_count']} 个):")
             for warning in result["warnings"]:
-                print(f"   [{warning.error_type.value}] {warning.field}: {warning.message}")
-        
+                print(
+                    f"   [{warning.error_type.value}] {warning.field}: {warning.message}"
+                )
+
         # 注：DashScope 风格 key 触发的"OpenAI API Key 格式不正确"为已知非致命警告（见 AGENTS.md）
     except Exception as e:
         print(f"\n❌ 验证失败: {e}")
@@ -560,25 +607,21 @@ def run_mock_mode():
     from src.fetcher import get_mock_news
     from src.summarizer import generate_article
     from src.unified_publisher import publish_article_unified
-    
+
     print("\n🎭 模拟数据模式")
-    print("="*50)
-    
+    print("=" * 50)
+
     news_items = get_mock_news(5)
     print(f"\n📰 模拟新闻: {len(news_items)} 条")
-    
+
     article = generate_article(news_items)
     print(f"📝 文章生成: {len(article)} 字符")
-    
+
     today = datetime.now().strftime("%Y年%m月%d日")
     title = f"🎯 {today} AI 资讯日报（模拟）"
-    
-    result = publish_article_unified(
-        title=title,
-        content=article,
-        mode="simple"
-    )
-    
+
+    result = publish_article_unified(title=title, content=article, mode="simple")
+
     if result["success"]:
         print(f"\n✅ 运行完成!")
         for f in result["files"]:
@@ -591,25 +634,25 @@ def run_custom_article(args=None):
     """生成自定义文章"""
     from src.custom_article import generate_custom_article, CustomArticleGenerator
     from src.publisher import publish_article
-    
-    print("\n" + "="*50)
+
+    print("\n" + "=" * 50)
     print("[INFO] AI News Publisher - 生成自定义文章")
-    print("="*50)
-    
+    print("=" * 50)
+
     start_time = datetime.now()
-    
+
     try:
         # 1. 确定文章类型
         article_type = "meeting_tools_review"
-        if args and hasattr(args, 'type'):
+        if args and hasattr(args, "type"):
             article_type = args.type
-        
+
         print(f"\n[STEP 1/3] 生成{article_type}文章...")
-        
+
         # 2. 生成文章
         article_content = generate_custom_article(article_type)
         print(f"   生成完成 ({len(article_content)} 字符)")
-        
+
         # 3. 确定标题
         if article_type == "meeting_tools_review":
             title = "AI Meeting Tools Review"
@@ -641,25 +684,25 @@ def run_custom_article(args=None):
             title = "AI 金融工具横评"
         elif article_type == "legal_tools_review":
             title = "AI 法律工具横评"
-        
+
         # 4. 发布或保存本地
         if "--publish" in sys.argv:
             # 发布到微信草稿箱
             print(f"\n[STEP 3/3] 发布到微信草稿箱...")
-            
+
             # 生成封面图
             print("   生成封面图...")
             cover_path = generate_cover_image(title)
-            
+
             # 发布
             result = publish_article(
                 title=title,
                 content=article_content,
                 author="AI Observer",
                 auto_publish=False,  # 仅创建草稿，不自动发布
-                cover_path=cover_path  # 使用生成的封面图
+                cover_path=cover_path,  # 使用生成的封面图
             )
-            
+
             if result:
                 print("   [SUCCESS] 已发布到微信草稿箱")
                 print("   请登录 https://mp.weixin.qq.com 查看草稿")
@@ -669,31 +712,35 @@ def run_custom_article(args=None):
             # 仅保存到本地
             print(f"\n[STEP 3/3] 保存文章到本地...")
             from pathlib import Path
+
             output_dir = Path("output")
             output_dir.mkdir(exist_ok=True)
-            
+
             # 保存Markdown
             md_path = output_dir / f"article_{datetime.now().strftime('%Y%m%d')}.md"
             with open(md_path, "w", encoding="utf-8") as f:
                 f.write(article_content)
             print(f"   已保存 Markdown: {md_path}")
-            
+
             # 同时导出HTML（如果有publisher）
             try:
                 from src.publisher import WeChatPublisher
+
                 pub = WeChatPublisher()
                 pub.export_html(article_content, title)
-                print(f"   已导出 HTML: output/article_{datetime.now().strftime('%Y%m%d')}.html")
+                print(
+                    f"   已导出 HTML: output/article_{datetime.now().strftime('%Y%m%d')}.html"
+                )
             except:
                 pass
-        
+
         elapsed = (datetime.now() - start_time).total_seconds()
-        
-        print("\n" + "="*50)
+
+        print("\n" + "=" * 50)
         print("[SUCCESS] 运行完成！")
         print(f"   耗时: {elapsed:.1f}秒")
-        print("="*50)
-        
+        print("=" * 50)
+
     except Exception as e:
         print(f"\n[ERROR] 运行失败: {e}")
         logger.error(f"run_custom_article 失败: {e}", exc_info=True)

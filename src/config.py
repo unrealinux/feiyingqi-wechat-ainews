@@ -44,6 +44,7 @@ def _load_env_file():
     # 优先使用 python-dotenv；缺失时退化为简易解析（仅 KEY=VALUE 行）
     try:
         from dotenv import load_dotenv
+
         load_dotenv(_ENV_FILE, override=False)
         return
     except ImportError:
@@ -93,8 +94,10 @@ def load_config(config_path: str = "config.yaml") -> dict:
 def get_wechat_config(config: dict) -> dict:
     return config.get("wechat", {})
 
+
 def get_openai_config(config: dict) -> dict:
     return config.get("openai", {})
+
 
 def get_openrouter_config(config: dict) -> dict:
     """获取OpenRouter配置"""

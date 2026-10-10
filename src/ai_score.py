@@ -82,12 +82,46 @@ AI_PHRASES = [
 
 # AI 高频名词 / 形容词(整篇密集出现即扣分)
 AI_VOCAB = [
-    "赋能", "打造", "聚焦", "深度融合", "生态", "闭环", "链路", "抓手",
-    "价值链", "护城河", "方法论", "底层逻辑", "生态位", "结构化思维",
-    "提升效率", "助力", "全链路", "一站式", "端到端", "量变到质变",
-    "引领", "颠覆", "革命性", "前所未有", "核心竞争力", "范式", "新范式",
-    "降本增效", "数字化转型", "智能化", "生态体系", "产业升级",
-    "破局", "出圈", "破圈", "沉淀", "赋予", "深耕", "蓝图", "新篇章",
+    "赋能",
+    "打造",
+    "聚焦",
+    "深度融合",
+    "生态",
+    "闭环",
+    "链路",
+    "抓手",
+    "价值链",
+    "护城河",
+    "方法论",
+    "底层逻辑",
+    "生态位",
+    "结构化思维",
+    "提升效率",
+    "助力",
+    "全链路",
+    "一站式",
+    "端到端",
+    "量变到质变",
+    "引领",
+    "颠覆",
+    "革命性",
+    "前所未有",
+    "核心竞争力",
+    "范式",
+    "新范式",
+    "降本增效",
+    "数字化转型",
+    "智能化",
+    "生态体系",
+    "产业升级",
+    "破局",
+    "出圈",
+    "破圈",
+    "沉淀",
+    "赋予",
+    "深耕",
+    "蓝图",
+    "新篇章",
 ]
 
 
@@ -129,6 +163,7 @@ def _split_sentences(text: str) -> list:
 
 
 # ---------- 各维度打分 ----------
+
 
 def score_burstiness(sentences: list) -> tuple:
     """
@@ -308,7 +343,11 @@ def analyze(md_text: str, mode: str = "news") -> dict:
     verdict = (
         "🟢 PASS (真人味)"
         if total < 35
-        else ("🟡 WARN (有 AI 味,建议改)" if total < 55 else "🔴 FAIL (AI 味太重,必须重写)")
+        else (
+            "🟡 WARN (有 AI 味,建议改)"
+            if total < 55
+            else "🔴 FAIL (AI 味太重,必须重写)"
+        )
     )
 
     return {
@@ -318,11 +357,11 @@ def analyze(md_text: str, mode: str = "news") -> dict:
         "char_count": len(plain),
         "sentence_count": len(sentences),
         "dimensions": {
-            "burstiness":   {"score": b_score,  "detail": b_det},
-            "phrases":      {"score": p_score,  "detail": p_det},
-            "vocab":        {"score": v_score,  "detail": v_det},
-            "structural":   {"score": s_score,  "detail": s_det},
-            "punctuation":  {"score": pu_score, "detail": pu_det},
+            "burstiness": {"score": b_score, "detail": b_det},
+            "phrases": {"score": p_score, "detail": p_det},
+            "vocab": {"score": v_score, "detail": v_det},
+            "structural": {"score": s_score, "detail": s_det},
+            "punctuation": {"score": pu_score, "detail": pu_det},
         },
         "weights": weights,
     }
@@ -362,15 +401,15 @@ def check_ai_score(
         "total_score": full["total_ai_score"],
         "mode": full.get("mode", mode),
         "dimensions": {
-            "burstiness":  dims["burstiness"]["score"],
-            "phrases":     dims["phrases"]["score"],
-            "vocab":       dims["vocab"]["score"],
-            "structural":  dims["structural"]["score"],
+            "burstiness": dims["burstiness"]["score"],
+            "phrases": dims["phrases"]["score"],
+            "vocab": dims["vocab"]["score"],
+            "structural": dims["structural"]["score"],
             "punctuation": dims["punctuation"]["score"],
         },
         "hit_phrases": hit_phrases,
-        "hit_vocab":   hit_vocab,
-        "threshold":   float(threshold),
+        "hit_vocab": hit_vocab,
+        "threshold": float(threshold),
     }
     passed = report["total_score"] < threshold
     return passed, report
@@ -403,7 +442,9 @@ def _pretty_print(report: dict):
         elif name == "burstiness" and det.get("cv") is not None:
             print(f"      句长均值 {det['mean_length']} 字,CV={det['cv']}")
         elif name == "punctuation":
-            print(f"      人味标点 {det.get('flavor_points', 0)} 次,期望 {det.get('expected', 0)}")
+            print(
+                f"      人味标点 {det.get('flavor_points', 0)} 次,期望 {det.get('expected', 0)}"
+            )
         elif name == "structural" and det.get("hit_count"):
             print(f"      教科书枚举命中 {det['hit_count']} 次")
     print("=" * 60)

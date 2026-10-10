@@ -20,15 +20,19 @@ from typing import Any, Dict, List, Optional
 # 颜色（取自母版，勿随意改，改了整站观感就不统一了）
 BG = "#F7F4EE"
 INK = "#1C1B18"
-ACCENT_PRIMARY = "#C8401F"   # 砖红：本方/重点
-ACCENT_SECOND = "#1F6F5B"    # 墨绿：对手/次级
+ACCENT_PRIMARY = "#C8401F"  # 砖红：本方/重点
+ACCENT_SECOND = "#1F6F5B"  # 墨绿：对手/次级
 MUTED = "#6E6A5E"
 HAIRLINE = "#D8D2C4"
 FAINT = "#B9B2A0"
 CARD_BG = "#FFFFFF"
 
-_ACCENTS = {"red": ACCENT_PRIMARY, "green": ACCENT_SECOND, "primary": ACCENT_PRIMARY,
-            "secondary": ACCENT_SECOND}
+_ACCENTS = {
+    "red": ACCENT_PRIMARY,
+    "green": ACCENT_SECOND,
+    "primary": ACCENT_PRIMARY,
+    "secondary": ACCENT_SECOND,
+}
 _BAR_COLORS = {
     "red": (ACCENT_PRIMARY, "1"),
     "primary": (ACCENT_PRIMARY, "1"),
@@ -81,7 +85,9 @@ def _inline(text: str) -> str:
 
 
 def _p(text: str, margin_bottom: int = 16) -> str:
-    return (f'<p style="text-indent:2em; margin:0 0 {margin_bottom}px;">{_inline(text)}</p>')
+    return (
+        f'<p style="text-indent:2em; margin:0 0 {margin_bottom}px;">{_inline(text)}</p>'
+    )
 
 
 def _section_heading(numeral: str, heading: str, accent: str) -> str:
@@ -94,20 +100,26 @@ def _section_heading(numeral: str, heading: str, accent: str) -> str:
 
 def _datacard(block: Dict[str, Any]) -> str:
     color = _ACCENTS.get(block.get("accent", "red"), ACCENT_PRIMARY)
-    parts = [f'<div style="margin:0 0 16px; padding:14px; background:{CARD_BG}; border-left:4px solid {color};">']
+    parts = [
+        f'<div style="margin:0 0 16px; padding:14px; background:{CARD_BG}; border-left:4px solid {color};">'
+    ]
     caption = block.get("caption")
     if caption:
-        parts.append(f'<p style="margin:0 0 10px; font-size:14px; color:{MUTED};">{_inline(caption)}</p>')
+        parts.append(
+            f'<p style="margin:0 0 10px; font-size:14px; color:{MUTED};">{_inline(caption)}</p>'
+        )
     for i, line in enumerate(block.get("lines") or []):
         margin = "0" if i == len(block["lines"]) - 1 else "6px 0"
         note = f'（{html.escape(str(line["note"]))}）' if line.get("note") else ""
         raw_value = str(line.get("value", ""))
         # 纯文字值（如「材料基础」）不做大号强调，避免把名词排成关键指标
         if re.search(r"\d", raw_value):
-            value_html = (f'<span style="color:{color}; font-weight:700; font-size:18px;">'
-                          f'{html.escape(raw_value)}</span>')
+            value_html = (
+                f'<span style="color:{color}; font-weight:700; font-size:18px;">'
+                f"{html.escape(raw_value)}</span>"
+            )
         else:
-            value_html = f'<strong>{_inline(raw_value)}</strong>'
+            value_html = f"<strong>{_inline(raw_value)}</strong>"
         parts.append(
             f'<p style="margin:{margin}; font-size:15px;">'
             f'<strong>{_inline(line.get("label", ""))}</strong>{note}：{value_html}</p>'
@@ -119,20 +131,34 @@ def _datacard(block: Dict[str, Any]) -> str:
 def _bars(block: Dict[str, Any]) -> str:
     color = _ACCENTS.get(block.get("accent", "green"), ACCENT_SECOND)
     rows = block.get("rows") or []
-    parts = [f'<div style="background:{CARD_BG}; padding:16px; margin:0 0 14px; border-left:4px solid {color};">']
+    parts = [
+        f'<div style="background:{CARD_BG}; padding:16px; margin:0 0 14px; border-left:4px solid {color};">'
+    ]
     caption = block.get("caption")
     if caption:
-        parts.append(f'<p style="margin:0 0 10px; font-size:14px; color:{MUTED};">{_inline(caption)}</p>')
+        parts.append(
+            f'<p style="margin:0 0 10px; font-size:14px; color:{MUTED};">{_inline(caption)}</p>'
+        )
     for i, row in enumerate(rows):
-        bar_color, opacity = _BAR_COLORS.get(row.get("color", "green"), (ACCENT_SECOND, "0.75"))
+        bar_color, opacity = _BAR_COLORS.get(
+            row.get("color", "green"), (ACCENT_SECOND, "0.75")
+        )
         try:
             value = float(row.get("value", 0))
         except (TypeError, ValueError):
             value = 0.0
         width = max(1.0, min(100.0, value))  # 条宽直接用数值本身（百分比）
         label = _inline(row.get("label", ""))
-        bold_open, bold_close = ("<strong>", "</strong>") if row.get("color") in ("red", "primary") else ("", "")
-        value_style = f'color:{bar_color}; font-weight:700;' if row.get("color") in ("red", "primary") else ""
+        bold_open, bold_close = (
+            ("<strong>", "</strong>")
+            if row.get("color") in ("red", "primary")
+            else ("", "")
+        )
+        value_style = (
+            f"color:{bar_color}; font-weight:700;"
+            if row.get("color") in ("red", "primary")
+            else ""
+        )
         last = i == len(rows) - 1
         parts.append(
             f'<p style="margin:0 0 4px; font-size:14px;">{bold_open}{label}{bold_close} '
@@ -168,7 +194,7 @@ def _render_blocks(blocks: List[Dict[str, Any]]) -> str:
                 tail = 24 if (last and j == len(items) - 1) else 8
                 out.append(
                     f'<p style="text-indent:2em; margin:0 0 {tail}px;">'
-                    f'· {_inline(item)}</p>'
+                    f"· {_inline(item)}</p>"
                 )
         elif kind == "datacard":
             out.append(_datacard(block))
@@ -191,7 +217,9 @@ def validate_spec(spec: Dict[str, Any]) -> None:
     if len(spec["sections"]) < 3:
         raise EditorialSpecError(f"章节过少（{len(spec['sections'])}），至少 3 节")
     if len(spec["sections"]) > len(SECTION_NUMERALS):
-        raise EditorialSpecError(f"章节过多（{len(spec['sections'])}），最多 {len(SECTION_NUMERALS)} 节")
+        raise EditorialSpecError(
+            f"章节过多（{len(spec['sections'])}），最多 {len(SECTION_NUMERALS)} 节"
+        )
     if len(spec["sources"]) < 2:
         raise EditorialSpecError("数据来源至少需要 2 条（AGENTS.md：内容必须可溯源）")
 
@@ -208,7 +236,8 @@ def normalize_meta_date(spec: Dict[str, Any], date_text: Optional[str] = None) -
     meta = str(spec.get("meta_line", "") or "")
     rest = re.sub(
         r"^\s*\d{4}\s*[年\-/. ]\s*\d{1,2}\s*[月\-/. ]\s*\d{1,2}\s*日?\s*",
-        "", meta,
+        "",
+        meta,
     ).lstrip("｜| 　")
     spec["meta_line"] = f"{date_text} ｜ {rest}" if rest else date_text
 
@@ -225,8 +254,11 @@ def render(spec: Dict[str, Any]) -> str:
 
     kicker = spec.get("kicker") or "AI 前沿观察 · 深读"
     meta_line = spec.get("meta_line", "")
-    title_html = "<br>".join(html.escape(p, quote=False).strip()
-                             for p in re.split(r"\n", str(spec["title"])) if p.strip())
+    title_html = "<br>".join(
+        html.escape(p, quote=False).strip()
+        for p in re.split(r"\n", str(spec["title"]))
+        if p.strip()
+    )
 
     parts = [
         f'<section style="background-color:{BG}; padding:24px 18px; max-width:677px; margin:0 auto; '
@@ -252,13 +284,17 @@ def render(spec: Dict[str, Any]) -> str:
     # 章节：序号自动分配，配色按 accent 交替
     for i, section in enumerate(spec["sections"]):
         accent = section.get("accent") or ("red" if i % 2 == 0 else "green")
-        parts.append(_section_heading(SECTION_NUMERALS[i], section.get("heading", ""), accent))
+        parts.append(
+            _section_heading(SECTION_NUMERALS[i], section.get("heading", ""), accent)
+        )
         parts.append(_render_blocks(section.get("blocks") or []))
 
     # 金句收束（双线红框）
     closing = list(spec["closing"])
-    box = [f'<div style="background:{CARD_BG}; padding:18px; margin:0 0 18px; '
-           f'border-top:3px double {ACCENT_PRIMARY}; border-bottom:3px double {ACCENT_PRIMARY};">']
+    box = [
+        f'<div style="background:{CARD_BG}; padding:18px; margin:0 0 18px; '
+        f'border-top:3px double {ACCENT_PRIMARY}; border-bottom:3px double {ACCENT_PRIMARY};">'
+    ]
     for i, para in enumerate(closing):
         margin = "0" if i == len(closing) - 1 else "0 0 8px"
         box.append(f'<p style="margin:{margin}; font-size:15px;">{_inline(para)}</p>')
@@ -274,8 +310,10 @@ def render(spec: Dict[str, Any]) -> str:
 
     # 落款
     signature = spec.get("signature") or "— AI 前沿观察 · 只做有出处的判断 —"
-    parts.append(f'<p style="margin:22px 0 0; text-align:center; color:{FAINT}; '
-                 f'font-size:12px;">{_inline(signature)}</p>')
+    parts.append(
+        f'<p style="margin:22px 0 0; text-align:center; color:{FAINT}; '
+        f'font-size:12px;">{_inline(signature)}</p>'
+    )
     parts.append("</section>")
     return "".join(parts)
 
@@ -312,19 +350,29 @@ def ground_numeric_blocks(spec: Dict[str, Any], material_text: str) -> List[str]
                 keep_rows = [r for r in rows if _numbers(r.get("value")) <= allowed]
                 for r in rows:
                     if r not in keep_rows:
-                        dropped.append(f"图表行「{r.get('label')}={r.get('value')}%」（素材无此数据）")
+                        dropped.append(
+                            f"图表行「{r.get('label')}={r.get('value')}%」（素材无此数据）"
+                        )
                 if len(keep_rows) < 2:
-                    dropped.append(f"图表「{block.get('caption') or '未命名'}」（可溯源数据不足 2 行）")
+                    dropped.append(
+                        f"图表「{block.get('caption') or '未命名'}」（可溯源数据不足 2 行）"
+                    )
                     continue
                 block = {**block, "rows": keep_rows}
             elif block.get("type") == "datacard":
                 lines = block.get("lines") or []
-                keep_lines = [ln for ln in lines if _numbers(ln.get("value")) <= allowed]
+                keep_lines = [
+                    ln for ln in lines if _numbers(ln.get("value")) <= allowed
+                ]
                 for ln in lines:
                     if ln not in keep_lines:
-                        dropped.append(f"数据卡行「{ln.get('label')}={ln.get('value')}」（素材无此数据）")
+                        dropped.append(
+                            f"数据卡行「{ln.get('label')}={ln.get('value')}」（素材无此数据）"
+                        )
                 if not keep_lines:
-                    dropped.append(f"数据卡「{block.get('caption') or '未命名'}」（无可溯源数据）")
+                    dropped.append(
+                        f"数据卡「{block.get('caption') or '未命名'}」（无可溯源数据）"
+                    )
                     continue
                 block = {**block, "lines": keep_lines}
             kept_blocks.append(block)
@@ -344,8 +392,9 @@ def find_blacklisted_terms(spec: Dict[str, Any], terms=TERM_BLACKLIST) -> List[s
 _IGNORABLE_NUMBERS = {"1", "2", "3", "4", "5", "6", "2025", "2026", "2027"}
 
 
-def find_ungrounded_numbers(spec: Dict[str, Any], material_text: str,
-                            limit: int = 12) -> List[str]:
+def find_ungrounded_numbers(
+    spec: Dict[str, Any], material_text: str, limit: int = 12
+) -> List[str]:
     """正文里“素材中找不到”的数字，仅用于审计告警（不阻断发布）。
 
     图表/数据卡的数字是硬闸（ground_numeric_blocks 直接删）；正文里的数字
@@ -396,7 +445,7 @@ def extract_json(raw: str) -> Dict[str, Any]:
         end = text.rfind("}")
         if start == -1 or end == -1:
             raise EditorialSpecError("模型输出里找不到 JSON 对象")
-        text = text[start:end + 1]
+        text = text[start : end + 1]
     try:
         spec = json.loads(text)
     except json.JSONDecodeError as e:

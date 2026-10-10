@@ -33,7 +33,17 @@ AGNES_IMAGE_ENDPOINT = "https://apihub.agnes-ai.com/v1/images/generations"
 _NO_TEXT = "no text, no letters, no watermark, no logo, no people's faces"
 _THEMES = {
     "datacenter": {
-        "keywords": ["数据中心", "算力", "服务器", "集群", "训练", "推理", "云", "能耗", "电力"],
+        "keywords": [
+            "数据中心",
+            "算力",
+            "服务器",
+            "集群",
+            "训练",
+            "推理",
+            "云",
+            "能耗",
+            "电力",
+        ],
         "prompt": (
             "Ultra-realistic photograph of a modern AI data center aisle at night. "
             "Rows of GPU server racks with dense blue and green indicator LEDs, "
@@ -43,17 +53,42 @@ _THEMES = {
         ),
     },
     "chip": {
-        "keywords": ["芯片", "半导体", "制程", "晶圆", "硅", "封装", "光刻", "材料", "铜", "硬件",
-                     "物质", "沙子", "晶体管", "摩尔定律"],
+        "keywords": [
+            "芯片",
+            "半导体",
+            "制程",
+            "晶圆",
+            "硅",
+            "封装",
+            "光刻",
+            "材料",
+            "铜",
+            "硬件",
+            "物质",
+            "沙子",
+            "晶体管",
+            "摩尔定律",
+        ],
         "prompt": (
             "Extreme macro photograph of an advanced AI processor die on a dark PCB. "
             "Golden and copper micro traces catching raking light, silicon surface reflections, "
             "tiny capacitors and solder bumps in sharp focus, extremely shallow depth of field, "
-            "thin film interference colors, dark background, studio macro lighting. " + _NO_TEXT
+            "thin film interference colors, dark background, studio macro lighting. "
+            + _NO_TEXT
         ),
     },
     "robot": {
-        "keywords": ["机器人", "具身", "机械", "自动化", "工厂", "制造", "无人", "驾驶", "汽车"],
+        "keywords": [
+            "机器人",
+            "具身",
+            "机械",
+            "自动化",
+            "工厂",
+            "制造",
+            "无人",
+            "驾驶",
+            "汽车",
+        ],
         "prompt": (
             "Photorealistic close-up of an industrial robotic arm in a clean modern factory, "
             "precision joint actuators and cabling, motion-blurred movement, "
@@ -62,7 +97,18 @@ _THEMES = {
         ),
     },
     "lab": {
-        "keywords": ["医疗", "生物", "药物", "科研", "实验", "基因", "蛋白", "材料", "科学", "物理"],
+        "keywords": [
+            "医疗",
+            "生物",
+            "药物",
+            "科研",
+            "实验",
+            "基因",
+            "蛋白",
+            "材料",
+            "科学",
+            "物理",
+        ],
         "prompt": (
             "Realistic laboratory photograph: glassware with glowing cyan liquid, "
             "an electron microscope in the background, precise scientific instruments, "
@@ -71,7 +117,20 @@ _THEMES = {
         ),
     },
     "network": {
-        "keywords": ["模型", "大模型", "神经网络", "开源", "安全", "对齐", "伦理", "监管", "广告", "商业", "资本", "投资"],
+        "keywords": [
+            "模型",
+            "大模型",
+            "神经网络",
+            "开源",
+            "安全",
+            "对齐",
+            "伦理",
+            "监管",
+            "广告",
+            "商业",
+            "资本",
+            "投资",
+        ],
         "prompt": (
             "Abstract photorealistic render of a neural network: thousands of luminous nodes "
             "connected by glowing fiber strands in dark space, depth haze, bokeh particles, "
@@ -80,7 +139,18 @@ _THEMES = {
         ),
     },
     "office": {
-        "keywords": ["产品", "发布", "公司", "团队", "办公", "创业", "会议", "生态", "合作", "大会"],
+        "keywords": [
+            "产品",
+            "发布",
+            "公司",
+            "团队",
+            "办公",
+            "创业",
+            "会议",
+            "生态",
+            "合作",
+            "大会",
+        ],
         "prompt": (
             "Photorealistic modern tech workspace at dusk: ultrawide curved monitors showing "
             "abstract data visualizations, mechanical keyboard, code reflections on a desk, "
@@ -109,10 +179,14 @@ def pick_theme(title: str, seed: Optional[int] = None) -> str:
     if best > 0:
         winners = sorted([n for n, v in scores.items() if v == best])
         # 同分时用日期做确定性选择，避免同一天多次调用得到不同主题
-        return winners[(seed if seed is not None else datetime.now().toordinal()) % len(winners)]
+        return winners[
+            (seed if seed is not None else datetime.now().toordinal()) % len(winners)
+        ]
 
     names = sorted(_THEMES.keys())
-    return names[(seed if seed is not None else datetime.now().toordinal()) % len(names)]
+    return names[
+        (seed if seed is not None else datetime.now().toordinal()) % len(names)
+    ]
 
 
 def _load_font(size: int):
@@ -127,13 +201,17 @@ def _load_font(size: int):
     return ImageFont.load_default()
 
 
-def _fetch_agnes_image(api_key: str, prompt: str, size: str = "1024x1024",
-                       timeout: int = 180) -> Optional[bytes]:
+def _fetch_agnes_image(
+    api_key: str, prompt: str, size: str = "1024x1024", timeout: int = 180
+) -> Optional[bytes]:
     """调 Agnes 文生图并下载图片字节；失败返回 None（不抛异常）。"""
     try:
         resp = requests.post(
             AGNES_IMAGE_ENDPOINT,
-            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+            headers={
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json",
+            },
             json={"model": "agnes-image-2.5-flash", "prompt": prompt, "size": size},
             timeout=timeout,
         )
@@ -156,8 +234,9 @@ def _fetch_agnes_image(api_key: str, prompt: str, size: str = "1024x1024",
         return None
 
 
-def _compose(img_bytes: bytes, title: str, date_text: str, author: str,
-             with_text: bool = False) -> bytes:
+def _compose(
+    img_bytes: bytes, title: str, date_text: str, author: str, with_text: bool = False
+) -> bytes:
     """把写实底图裁成 16:9，输出干净封面。
 
     默认 **不叠加任何文字**：标题/署名/日期一律不上图。
@@ -231,8 +310,13 @@ def _compose(img_bytes: bytes, title: str, date_text: str, author: str,
             y += 100
 
         # --- 底部日期 ---
-        draw.text((COVER_WIDTH - 90, COVER_HEIGHT - 76), f"{author} · {date_text}",
-                  font=_load_font(28), fill=(198, 214, 210), anchor="ra")
+        draw.text(
+            (COVER_WIDTH - 90, COVER_HEIGHT - 76),
+            f"{author} · {date_text}",
+            font=_load_font(28),
+            fill=(198, 214, 210),
+            anchor="ra",
+        )
     else:
         pass  # 纯图模式：不叠字、不压暗，保留照片原貌
 
@@ -241,12 +325,14 @@ def _compose(img_bytes: bytes, title: str, date_text: str, author: str,
     return out.getvalue()
 
 
-def generate_ai_photo_cover(title: str,
-                            output_path: str = "output/cover_ai.jpg",
-                            author: str = "AI前沿观察",
-                            date_text: Optional[str] = None,
-                            theme: Optional[str] = None,
-                            with_text: bool = False) -> Tuple[Optional[str], Optional[str]]:
+def generate_ai_photo_cover(
+    title: str,
+    output_path: str = "output/cover_ai.jpg",
+    author: str = "AI前沿观察",
+    date_text: Optional[str] = None,
+    theme: Optional[str] = None,
+    with_text: bool = False,
+) -> Tuple[Optional[str], Optional[str]]:
     """生成写实风封面。
 
     Args:
@@ -279,7 +365,9 @@ def generate_ai_photo_cover(title: str,
     out = Path(output_path)
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_bytes(composed)
-    logger.info(f"[封面] 写实封面已生成: {out} ({len(composed)//1024} KB, 主题={theme})")
+    logger.info(
+        f"[封面] 写实封面已生成: {out} ({len(composed)//1024} KB, 主题={theme})"
+    )
     return str(out), theme
 
 

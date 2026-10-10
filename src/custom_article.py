@@ -21,8 +21,8 @@ from src.summarizer import Summarizer, LLMUnavailableError
 
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s',
-    datefmt='%H:%M:%S'
+    format="%(asctime)s - %(levelname)s - %(message)s",
+    datefmt="%H:%M:%S",
 )
 logger = logging.getLogger(__name__)
 
@@ -55,54 +55,58 @@ TABLE_FORMAT_INSTRUCTION = """
 ```
 """
 
+
 class CustomArticleGenerator:
     """自定义文章生成器"""
-    
+
     def __init__(self):
         self.config = load_config()
         self.domestic_llm = get_domestic_llm()
         self.summarizer = Summarizer()
         self._init_image_generator()
-    
+
     def _init_image_generator(self):
         """初始化图片生成器"""
         try:
             from src.dashscope_image_gen import DashScopeImageGenerator
+
             self.image_generator = DashScopeImageGenerator()
             logger.info("DashScope image generator initialized")
         except Exception as e:
             logger.warning(f"Failed to initialize image generator: {e}")
             self.image_generator = None
-    
-    def generate_cover_image(self, title: str, output_dir: str = "output") -> Optional[str]:
+
+    def generate_cover_image(
+        self, title: str, output_dir: str = "output"
+    ) -> Optional[str]:
         """
         生成文章封面图
-        
+
         Args:
             title: 文章标题
             output_dir: 输出目录
-            
+
         Returns:
             str: 图片路径，失败返回 None
         """
         if not self.image_generator:
             logger.warning("Image generator not available")
             return None
-        
+
         logger.info(f"Generating cover image for: {title}")
         return self.image_generator.generate_ai_meeting_cover(title, output_dir)
-    
+
     def generate_note_tools_review(self) -> str:
         """
         生成AI笔记工具横评文章
-        
+
         Returns:
             str: 生成的文章内容（Markdown格式）
         """
         system_prompt = """你是一位专业的科技编辑，擅长撰写深度横评文章。
 文笔专业严谨，分析全面深入，适合公众号读者阅读。
 文章结构清晰，对比分析透彻，观点客观公正。"""
-        
+
         user_prompt = """请为微信公众号撰写一篇关于AI笔记工具的深度横评文章。
 
 要求：
@@ -136,7 +140,7 @@ class CustomArticleGenerator:
                     return result
             except Exception as e:
                 logger.warning(f"国内LLM生成失败: {e}")
-        
+
         # 回退到OpenAI
         if self.summarizer.client:
             logger.info("使用OpenAI生成文章")
@@ -145,13 +149,13 @@ class CustomArticleGenerator:
                     model=self.summarizer.model,
                     messages=[
                         {"role": "system", "content": system_prompt},
-                        {"role": "user", "content": user_prompt}
+                        {"role": "user", "content": user_prompt},
                     ],
                     temperature=0.7,
                     max_tokens=4000,
-                    timeout=30
+                    timeout=30,
                 )
-                
+
                 article = response.choices[0].message.content
                 if article:
                     return article
@@ -162,13 +166,13 @@ class CustomArticleGenerator:
         raise LLMUnavailableError(
             "所有 LLM 均不可用，本次不产出文章（模板兜底已移除，见 AGENTS.md）"
         )
-    
+
     def generate_search_tools_review(self) -> str:
         """生成AI搜索工具横评文章"""
         system_prompt = """你是一位专业的科技编辑，擅长撰写深度横评文章。
 文笔专业严谨，分析全面深入，适合公众号读者阅读。
 文章结构清晰，对比分析透彻，观点客观公正。"""
-        
+
         user_prompt = """请为微信公众号撰写一篇关于AI搜索工具的深度横评文章。
 
 要求：
@@ -200,18 +204,18 @@ class CustomArticleGenerator:
                     return result
             except Exception as e:
                 logger.warning(f"国内LLM生成失败: {e}")
-        
+
         if self.summarizer.client:
             try:
                 response = self.summarizer.client.chat.completions.create(
                     model=self.summarizer.model,
                     messages=[
                         {"role": "system", "content": system_prompt},
-                        {"role": "user", "content": user_prompt}
+                        {"role": "user", "content": user_prompt},
                     ],
                     temperature=0.7,
                     max_tokens=4000,
-                    timeout=30
+                    timeout=30,
                 )
                 article = response.choices[0].message.content
                 if article:
@@ -223,13 +227,13 @@ class CustomArticleGenerator:
         raise LLMUnavailableError(
             "所有 LLM 均不可用，本次不产出文章（模板兜底已移除，见 AGENTS.md）"
         )
-    
+
     def generate_code_tools_review(self) -> str:
         """生成AI编程工具横评文章"""
         system_prompt = """你是一位专业的科技编辑，擅长撰写深度横评文章。
 文笔专业严谨，分析全面深入，适合公众号读者阅读。
 文章结构清晰，对比分析透彻，观点客观公正。"""
-        
+
         user_prompt = """请为微信公众号撰写一篇关于AI编程工具的深度横评文章。
 
 要求：
@@ -261,18 +265,18 @@ class CustomArticleGenerator:
                     return result
             except Exception as e:
                 logger.warning(f"国内LLM生成失败: {e}")
-        
+
         if self.summarizer.client:
             try:
                 response = self.summarizer.client.chat.completions.create(
                     model=self.summarizer.model,
                     messages=[
                         {"role": "system", "content": system_prompt},
-                        {"role": "user", "content": user_prompt}
+                        {"role": "user", "content": user_prompt},
                     ],
                     temperature=0.7,
                     max_tokens=4000,
-                    timeout=30
+                    timeout=30,
                 )
                 article = response.choices[0].message.content
                 if article:
@@ -284,13 +288,13 @@ class CustomArticleGenerator:
         raise LLMUnavailableError(
             "所有 LLM 均不可用，本次不产出文章（模板兜底已移除，见 AGENTS.md）"
         )
-    
+
     def generate_video_tools_review(self) -> str:
         """生成AI视频工具横评文章"""
         system_prompt = """你是一位专业的科技编辑，擅长撰写深度横评文章。
 文笔专业严谨，分析全面深入，适合公众号读者阅读。
 文章结构清晰，对比分析透彻，观点客观公正。"""
-        
+
         user_prompt = """请为微信公众号撰写一篇关于AI视频工具的深度横评文章。
 
 要求：
@@ -322,18 +326,18 @@ class CustomArticleGenerator:
                     return result
             except Exception as e:
                 logger.warning(f"国内LLM生成失败: {e}")
-        
+
         if self.summarizer.client:
             try:
                 response = self.summarizer.client.chat.completions.create(
                     model=self.summarizer.model,
                     messages=[
                         {"role": "system", "content": system_prompt},
-                        {"role": "user", "content": user_prompt}
+                        {"role": "user", "content": user_prompt},
                     ],
                     temperature=0.7,
                     max_tokens=4000,
-                    timeout=30
+                    timeout=30,
                 )
                 article = response.choices[0].message.content
                 if article:
@@ -345,13 +349,13 @@ class CustomArticleGenerator:
         raise LLMUnavailableError(
             "所有 LLM 均不可用，本次不产出文章（模板兜底已移除，见 AGENTS.md）"
         )
-    
+
     def generate_audio_tools_review(self) -> str:
         """生成AI音频工具横评文章"""
         system_prompt = """你是一位专业的科技编辑，擅长撰写深度横评文章。
 文笔专业严谨，分析全面深入，适合公众号读者阅读。
 文章结构清晰，对比分析透彻，观点客观公正。"""
-        
+
         user_prompt = """请为微信公众号撰写一篇关于AI音频工具的深度横评文章。
 
 要求：
@@ -383,18 +387,18 @@ class CustomArticleGenerator:
                     return result
             except Exception as e:
                 logger.warning(f"国内LLM生成失败: {e}")
-        
+
         if self.summarizer.client:
             try:
                 response = self.summarizer.client.chat.completions.create(
                     model=self.summarizer.model,
                     messages=[
                         {"role": "system", "content": system_prompt},
-                        {"role": "user", "content": user_prompt}
+                        {"role": "user", "content": user_prompt},
                     ],
                     temperature=0.7,
                     max_tokens=4000,
-                    timeout=30
+                    timeout=30,
                 )
                 article = response.choices[0].message.content
                 if article:
@@ -406,13 +410,13 @@ class CustomArticleGenerator:
         raise LLMUnavailableError(
             "所有 LLM 均不可用，本次不产出文章（模板兜底已移除，见 AGENTS.md）"
         )
-    
+
     def generate_office_tools_review(self) -> str:
         """生成AI办公工具横评文章"""
         system_prompt = """你是一位专业的科技编辑，擅长撰写深度横评文章。
 文笔专业严谨，分析全面深入，适合公众号读者阅读。
 文章结构清晰，对比分析透彻，观点客观公正。"""
-        
+
         user_prompt = """请为微信公众号撰写一篇关于AI办公工具的深度横评文章。
 
 要求：
@@ -444,18 +448,18 @@ class CustomArticleGenerator:
                     return result
             except Exception as e:
                 logger.warning(f"国内LLM生成失败: {e}")
-        
+
         if self.summarizer.client:
             try:
                 response = self.summarizer.client.chat.completions.create(
                     model=self.summarizer.model,
                     messages=[
                         {"role": "system", "content": system_prompt},
-                        {"role": "user", "content": user_prompt}
+                        {"role": "user", "content": user_prompt},
                     ],
                     temperature=0.7,
                     max_tokens=4000,
-                    timeout=30
+                    timeout=30,
                 )
                 article = response.choices[0].message.content
                 if article:
@@ -467,13 +471,13 @@ class CustomArticleGenerator:
         raise LLMUnavailableError(
             "所有 LLM 均不可用，本次不产出文章（模板兜底已移除，见 AGENTS.md）"
         )
-    
+
     def generate_design_tools_review(self) -> str:
         """生成AI设计工具横评文章"""
         system_prompt = """你是一位专业的科技编辑，擅长撰写深度横评文章。
 文笔专业严谨，分析全面深入，适合公众号读者阅读。
 文章结构清晰，对比分析透彻，观点客观公正。"""
-        
+
         user_prompt = """请为微信公众号撰写一篇关于AI设计工具的深度横评文章。
 
 要求：
@@ -505,18 +509,18 @@ class CustomArticleGenerator:
                     return result
             except Exception as e:
                 logger.warning(f"国内LLM生成失败: {e}")
-        
+
         if self.summarizer.client:
             try:
                 response = self.summarizer.client.chat.completions.create(
                     model=self.summarizer.model,
                     messages=[
                         {"role": "system", "content": system_prompt},
-                        {"role": "user", "content": user_prompt}
+                        {"role": "user", "content": user_prompt},
                     ],
                     temperature=0.7,
                     max_tokens=4000,
-                    timeout=30
+                    timeout=30,
                 )
                 article = response.choices[0].message.content
                 if article:
@@ -528,13 +532,13 @@ class CustomArticleGenerator:
         raise LLMUnavailableError(
             "所有 LLM 均不可用，本次不产出文章（模板兜底已移除，见 AGENTS.md）"
         )
-    
+
     def generate_marketing_tools_review(self) -> str:
         """生成AI营销工具横评文章"""
         system_prompt = """你是一位专业的科技编辑，擅长撰写深度横评文章。
 文笔专业严谨，分析全面深入，适合公众号读者阅读。
 文章结构清晰，对比分析透彻，观点客观公正。"""
-        
+
         user_prompt = """请为微信公众号撰写一篇关于AI营销工具的深度横评文章。
 
 要求：
@@ -566,18 +570,18 @@ class CustomArticleGenerator:
                     return result
             except Exception as e:
                 logger.warning(f"国内LLM生成失败: {e}")
-        
+
         if self.summarizer.client:
             try:
                 response = self.summarizer.client.chat.completions.create(
                     model=self.summarizer.model,
                     messages=[
                         {"role": "system", "content": system_prompt},
-                        {"role": "user", "content": user_prompt}
+                        {"role": "user", "content": user_prompt},
                     ],
                     temperature=0.7,
                     max_tokens=4000,
-                    timeout=30
+                    timeout=30,
                 )
                 article = response.choices[0].message.content
                 if article:
@@ -589,13 +593,13 @@ class CustomArticleGenerator:
         raise LLMUnavailableError(
             "所有 LLM 均不可用，本次不产出文章（模板兜底已移除，见 AGENTS.md）"
         )
-    
+
     def generate_data_tools_review(self) -> str:
         """生成AI数据分析工具横评文章"""
         system_prompt = """你是一位专业的科技编辑，擅长撰写深度横评文章。
 文笔专业严谨，分析全面深入，适合公众号读者阅读。
 文章结构清晰，对比分析透彻，观点客观公正。"""
-        
+
         user_prompt = """请为微信公众号撰写一篇关于AI数据分析工具的深度横评文章。
 
 要求：
@@ -627,18 +631,18 @@ class CustomArticleGenerator:
                     return result
             except Exception as e:
                 logger.warning(f"国内LLM生成失败: {e}")
-        
+
         if self.summarizer.client:
             try:
                 response = self.summarizer.client.chat.completions.create(
                     model=self.summarizer.model,
                     messages=[
                         {"role": "system", "content": system_prompt},
-                        {"role": "user", "content": user_prompt}
+                        {"role": "user", "content": user_prompt},
                     ],
                     temperature=0.7,
                     max_tokens=4000,
-                    timeout=30
+                    timeout=30,
                 )
                 article = response.choices[0].message.content
                 if article:
@@ -650,13 +654,13 @@ class CustomArticleGenerator:
         raise LLMUnavailableError(
             "所有 LLM 均不可用，本次不产出文章（模板兜底已移除，见 AGENTS.md）"
         )
-    
+
     def generate_education_tools_review(self) -> str:
         """生成AI教育工具横评文章"""
         system_prompt = """你是一位专业的科技编辑，擅长撰写深度横评文章。
 文笔专业严谨，分析全面深入，适合公众号读者阅读。
 文章结构清晰，对比分析透彻，观点客观公正。"""
-        
+
         user_prompt = """请为微信公众号撰写一篇关于AI教育工具的深度横评文章。
 
 要求：
@@ -688,18 +692,18 @@ class CustomArticleGenerator:
                     return result
             except Exception as e:
                 logger.warning(f"国内LLM生成失败: {e}")
-        
+
         if self.summarizer.client:
             try:
                 response = self.summarizer.client.chat.completions.create(
                     model=self.summarizer.model,
                     messages=[
                         {"role": "system", "content": system_prompt},
-                        {"role": "user", "content": user_prompt}
+                        {"role": "user", "content": user_prompt},
                     ],
                     temperature=0.7,
                     max_tokens=4000,
-                    timeout=30
+                    timeout=30,
                 )
                 article = response.choices[0].message.content
                 if article:
@@ -711,13 +715,13 @@ class CustomArticleGenerator:
         raise LLMUnavailableError(
             "所有 LLM 均不可用，本次不产出文章（模板兜底已移除，见 AGENTS.md）"
         )
-    
+
     def generate_medical_tools_review(self) -> str:
         """生成AI医疗工具横评文章"""
         system_prompt = """你是一位专业的科技编辑，擅长撰写深度横评文章。
 文笔专业严谨，分析全面深入，适合公众号读者阅读。
 文章结构清晰，对比分析透彻，观点客观公正。"""
-        
+
         user_prompt = """请为微信公众号撰写一篇关于AI医疗工具的深度横评文章。
 
 要求：
@@ -749,18 +753,18 @@ class CustomArticleGenerator:
                     return result
             except Exception as e:
                 logger.warning(f"国内LLM生成失败: {e}")
-        
+
         if self.summarizer.client:
             try:
                 response = self.summarizer.client.chat.completions.create(
                     model=self.summarizer.model,
                     messages=[
                         {"role": "system", "content": system_prompt},
-                        {"role": "user", "content": user_prompt}
+                        {"role": "user", "content": user_prompt},
                     ],
                     temperature=0.7,
                     max_tokens=4000,
-                    timeout=30
+                    timeout=30,
                 )
                 article = response.choices[0].message.content
                 if article:
@@ -772,13 +776,13 @@ class CustomArticleGenerator:
         raise LLMUnavailableError(
             "所有 LLM 均不可用，本次不产出文章（模板兜底已移除，见 AGENTS.md）"
         )
-    
+
     def generate_finance_tools_review(self) -> str:
         """生成AI金融工具横评文章"""
         system_prompt = """你是一位专业的科技编辑，擅长撰写深度横评文章。
 文笔专业严谨，分析全面深入，适合公众号读者阅读。
 文章结构清晰，对比分析透彻，观点客观公正。"""
-        
+
         user_prompt = """请为微信公众号撰写一篇关于AI金融工具的深度横评文章。
 
 要求：
@@ -810,18 +814,18 @@ class CustomArticleGenerator:
                     return result
             except Exception as e:
                 logger.warning(f"国内LLM生成失败: {e}")
-        
+
         if self.summarizer.client:
             try:
                 response = self.summarizer.client.chat.completions.create(
                     model=self.summarizer.model,
                     messages=[
                         {"role": "system", "content": system_prompt},
-                        {"role": "user", "content": user_prompt}
+                        {"role": "user", "content": user_prompt},
                     ],
                     temperature=0.7,
                     max_tokens=4000,
-                    timeout=30
+                    timeout=30,
                 )
                 article = response.choices[0].message.content
                 if article:
@@ -833,13 +837,13 @@ class CustomArticleGenerator:
         raise LLMUnavailableError(
             "所有 LLM 均不可用，本次不产出文章（模板兜底已移除，见 AGENTS.md）"
         )
-    
+
     def generate_legal_tools_review(self) -> str:
         """生成AI法律工具横评文章"""
         system_prompt = """你是一位专业的科技编辑，擅长撰写深度横评文章。
 文笔专业严谨，分析全面深入，适合公众号读者阅读。
 文章结构清晰，对比分析透彻，观点客观公正。"""
-        
+
         user_prompt = """请为微信公众号撰写一篇关于AI法律工具的深度横评文章。
 
 要求：
@@ -871,18 +875,18 @@ class CustomArticleGenerator:
                     return result
             except Exception as e:
                 logger.warning(f"国内LLM生成失败: {e}")
-        
+
         if self.summarizer.client:
             try:
                 response = self.summarizer.client.chat.completions.create(
                     model=self.summarizer.model,
                     messages=[
                         {"role": "system", "content": system_prompt},
-                        {"role": "user", "content": user_prompt}
+                        {"role": "user", "content": user_prompt},
                     ],
                     temperature=0.7,
                     max_tokens=4000,
-                    timeout=30
+                    timeout=30,
                 )
                 article = response.choices[0].message.content
                 if article:
@@ -894,18 +898,18 @@ class CustomArticleGenerator:
         raise LLMUnavailableError(
             "所有 LLM 均不可用，本次不产出文章（模板兜底已移除，见 AGENTS.md）"
         )
-    
+
     def generate_image_tools_review(self) -> str:
         """
         生成AI绘画工具横评文章
-        
+
         Returns:
             str: 生成的文章内容（Markdown格式）
         """
         system_prompt = """你是一位专业的科技编辑，擅长撰写深度横评文章。
 文笔专业严谨，分析全面深入，适合公众号读者阅读。
 文章结构清晰，对比分析透彻，观点客观公正。"""
-        
+
         user_prompt = """请为微信公众号撰写一篇关于AI绘画工具的深度横评文章。
 
 要求：
@@ -939,7 +943,7 @@ class CustomArticleGenerator:
                     return result
             except Exception as e:
                 logger.warning(f"国内LLM生成失败: {e}")
-        
+
         # 回退到OpenAI（快速失败）
         if self.summarizer.client:
             logger.info("使用OpenAI生成文章")
@@ -948,13 +952,13 @@ class CustomArticleGenerator:
                     model=self.summarizer.model,
                     messages=[
                         {"role": "system", "content": system_prompt},
-                        {"role": "user", "content": user_prompt}
+                        {"role": "user", "content": user_prompt},
                     ],
                     temperature=0.7,
                     max_tokens=4000,
-                    timeout=30  # 减少超时时间
+                    timeout=30,  # 减少超时时间
                 )
-                
+
                 article = response.choices[0].message.content
                 if article:
                     return article
@@ -965,18 +969,18 @@ class CustomArticleGenerator:
         raise LLMUnavailableError(
             "所有 LLM 均不可用，本次不产出文章（模板兜底已移除，见 AGENTS.md）"
         )
-    
+
     def generate_meeting_tools_review(self) -> str:
         """
         生成AI会议工具横评文章
-        
+
         Returns:
             str: 生成的文章内容（Markdown格式）
         """
         system_prompt = """你是一位专业的科技编辑，擅长撰写深度横评文章。
 文笔专业严谨，分析全面深入，适合公众号读者阅读。
 文章结构清晰，对比分析透彻，观点客观公正。"""
-        
+
         user_prompt = """请为微信公众号撰写一篇关于AI会议工具的深度横评文章。
 
 要求：
@@ -1020,7 +1024,7 @@ class CustomArticleGenerator:
                     return result
             except Exception as e:
                 logger.warning(f"国内LLM生成失败: {e}")
-        
+
         # 回退到OpenAI（快速失败）
         if self.summarizer.client:
             logger.info("使用OpenAI生成文章")
@@ -1029,13 +1033,13 @@ class CustomArticleGenerator:
                     model=self.summarizer.model,
                     messages=[
                         {"role": "system", "content": system_prompt},
-                        {"role": "user", "content": user_prompt}
+                        {"role": "user", "content": user_prompt},
                     ],
                     temperature=0.7,
                     max_tokens=4000,
-                    timeout=30  # 减少超时时间
+                    timeout=30,  # 减少超时时间
                 )
-                
+
                 article = response.choices[0].message.content
                 if article:
                     return article
@@ -1046,32 +1050,32 @@ class CustomArticleGenerator:
         raise LLMUnavailableError(
             "所有 LLM 均不可用，本次不产出文章（模板兜底已移除，见 AGENTS.md）"
         )
-    
+
     def save_article(self, article: str, title: str = None) -> tuple:
         """
         保存文章到本地
-        
+
         Args:
             article: 文章内容
             title: 文章标题（可选）
-            
+
         Returns:
             tuple: (md_path, html_path)
         """
         output_dir = Path("output")
         output_dir.mkdir(exist_ok=True)
-        
+
         today = datetime.now().strftime("%Y%m%d")
         md_path = output_dir / f"ai_meeting_tools_review_{today}.md"
         html_path = output_dir / f"ai_meeting_tools_review_{today}.html"
-        
+
         # 保存Markdown
         with open(md_path, "w", encoding="utf-8") as f:
             if title:
                 f.write(f"# {title}\n\n{article}")
             else:
                 f.write(article)
-        
+
         logger.info(f"文章已保存: {md_path}")
         return md_path, html_path
 
@@ -1079,15 +1083,15 @@ class CustomArticleGenerator:
 def generate_custom_article(article_type: str = "meeting_tools_review") -> str:
     """
     生成自定义文章的便捷函数
-    
+
     Args:
         article_type: 文章类型
-        
+
     Returns:
         str: 生成的文章内容
     """
     generator = CustomArticleGenerator()
-    
+
     if article_type == "meeting_tools_review":
         return generator.generate_meeting_tools_review()
     elif article_type == "image_tools_review":

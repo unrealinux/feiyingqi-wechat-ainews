@@ -139,11 +139,15 @@ def get_article_files():
         files = sorted(OUTPUT_DIR.glob("article_*.md"), reverse=True)[:10]
         for f in files:
             stat = f.stat()
-            articles.append({
-                "name": f.name,
-                "date": datetime.fromtimestamp(stat.st_mtime).strftime("%Y-%m-%d %H:%M"),
-                "size": f"{stat.st_size / 1024:.1f} KB"
-            })
+            articles.append(
+                {
+                    "name": f.name,
+                    "date": datetime.fromtimestamp(stat.st_mtime).strftime(
+                        "%Y-%m-%d %H:%M"
+                    ),
+                    "size": f"{stat.st_size / 1024:.1f} KB",
+                }
+            )
     return articles
 
 
@@ -152,14 +156,15 @@ def dashboard():
     """仪表盘"""
     articles = get_article_files()
     config = load_config()
-    
+
     news_sources = len(config.get("news", {}).get("search_keywords", []))
-    
-    return render_template_string(DASHBOARD_HTML,
+
+    return render_template_string(
+        DASHBOARD_HTML,
         article_count=len(articles),
         news_sources=news_sources,
         last_run=datetime.now().strftime("%H:%M"),
-        articles=articles
+        articles=articles,
     )
 
 
@@ -168,7 +173,9 @@ def api_run():
     """运行一次"""
     try:
         result = run_once()
-        return jsonify({"success": result, "message": "文章已生成" if result else "运行失败"})
+        return jsonify(
+            {"success": result, "message": "文章已生成" if result else "运行失败"}
+        )
     except Exception as e:
         logger.error(f"Run failed: {e}")
         return jsonify({"success": False, "message": str(e)}), 500

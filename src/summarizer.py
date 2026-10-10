@@ -16,8 +16,8 @@ from src.fetcher import NewsItem
 
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s',
-    datefmt='%H:%M:%S'
+    format="%(asctime)s - %(levelname)s - %(message)s",
+    datefmt="%H:%M:%S",
 )
 logger = logging.getLogger(__name__)
 
@@ -42,18 +42,42 @@ class ThinMaterialError(LLMUnavailableError):
 # 只要目标服务兼容 OpenAI /chat/completions，就能直接接入。
 # 注意 agnes 段的 model 是封面图模型，所以文本模型另用 text_model 键，避免拿图片模型去写文章。
 _LLM_PROVIDERS = {
-    "agnes":       ("agnes",       "https://apihub.agnes-ai.com/v1",       "agnes-3.0-flash",
-                    "AGNES_API_KEY",        "text_model"),
-    "deepseek":    ("deepseek",    "https://api.deepseek.com/v1",          "deepseek-chat",
-                    "DEEPSEEK_API_KEY",     "model"),
-    "zhipu":       ("zhipu",       "https://open.bigmodel.cn/api/paas/v4",  "glm-4-flash",
-                    "ZHIPU_API_KEY",        "model"),
-    "siliconflow": ("siliconflow", "https://api.siliconflow.cn/v1",        "Qwen/Qwen2.5-7B-Instruct",
-                    "SILICONFLOW_API_KEY",  "model"),
-    "openrouter":  ("openrouter",  "https://openrouter.ai/api/v1",         "google/gemini-2.0-flash-001",
-                    "OPENROUTER_API_KEY",   "model"),
-    "openai":      ("openai",      None,                                   "gpt-4o-mini",
-                    "OPENAI_API_KEY",       "model"),
+    "agnes": (
+        "agnes",
+        "https://apihub.agnes-ai.com/v1",
+        "agnes-3.0-flash",
+        "AGNES_API_KEY",
+        "text_model",
+    ),
+    "deepseek": (
+        "deepseek",
+        "https://api.deepseek.com/v1",
+        "deepseek-chat",
+        "DEEPSEEK_API_KEY",
+        "model",
+    ),
+    "zhipu": (
+        "zhipu",
+        "https://open.bigmodel.cn/api/paas/v4",
+        "glm-4-flash",
+        "ZHIPU_API_KEY",
+        "model",
+    ),
+    "siliconflow": (
+        "siliconflow",
+        "https://api.siliconflow.cn/v1",
+        "Qwen/Qwen2.5-7B-Instruct",
+        "SILICONFLOW_API_KEY",
+        "model",
+    ),
+    "openrouter": (
+        "openrouter",
+        "https://openrouter.ai/api/v1",
+        "google/gemini-2.0-flash-001",
+        "OPENROUTER_API_KEY",
+        "model",
+    ),
+    "openai": ("openai", None, "gpt-4o-mini", "OPENAI_API_KEY", "model"),
 }
 
 # llm.provider = auto 时的探测顺序（先挑当前最可用的）
@@ -99,7 +123,7 @@ def _concrete_facts(material: str, limit: int = 3) -> List[str]:
 
 class Summarizer:
     """AI 摘要生成器"""
-    
+
     def __init__(self):
         config = load_config()
         llm_config = get_llm_config(config)
@@ -136,29 +160,36 @@ class Summarizer:
             override = llm_config.get("model") if requested in _LLM_PROVIDERS else ""
             self.model = override or chosen["model"]
             self.base_url = chosen["base_url"]
-            logger.info(f"LLM provider: {self.provider} | model: {self.model} | base_url: {self.base_url}")
+            logger.info(
+                f"LLM provider: {self.provider} | model: {self.model} | base_url: {self.base_url}"
+            )
 
         if not self.api_key:
             self.client = None
         else:
             try:
                 from openai import OpenAI
+
                 # 设置超时和重试参数
                 kwargs = {
                     "api_key": self.api_key,
                     "timeout": 30.0,  # 30秒超时
-                    "max_retries": 1  # 最多重试1次
+                    "max_retries": 1,  # 最多重试1次
                 }
                 if self.base_url:
                     kwargs["base_url"] = self.base_url
-                
+
                 self.client = OpenAI(**kwargs)
-                logger.info(f"OpenAI client initialized ({self.model}, base_url={self.base_url})")
+                logger.info(
+                    f"OpenAI client initialized ({self.model}, base_url={self.base_url})"
+                )
             except ImportError:
                 logger.warning("openai library not installed")
                 self.client = None
-    
-    def summarize_news(self, news_items: List[NewsItem], allow_mock: bool = True) -> str:
+
+    def summarize_news(
+        self, news_items: List[NewsItem], allow_mock: bool = True
+    ) -> str:
         """生成公众号文章
 
         Args:
@@ -173,9 +204,9 @@ class Summarizer:
                     "LLM 客户端不可用（未配置 API Key 或 openai 库缺失），拒绝生成 mock 稿件"
                 )
             return self._mock_summarize(news_items)
-        
+
         news_content = self._prepare_news_content(news_items)
-        
+
         system_prompt = """你是一位资深 AI 领域深度观察者，擅长从新闻素材中提炼独特视角，写出有观点、有深度的原创评论。
 写作要求：每篇独立构思，杜绝模板化套路；标题不落俗套，有钩子但不过度夸张；避免反复使用固定句式和结构。
 对每条素材做事实性转述，不编造数据、不虚构人物，所有论断都必须来自给定素材。"""
@@ -201,13 +232,13 @@ class Summarizer:
                 model=self.model,
                 messages=[
                     {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_prompt}
+                    {"role": "user", "content": user_prompt},
                 ],
                 temperature=0.9,
                 max_tokens=4000,
-                timeout=60
+                timeout=60,
             )
-            
+
             article = response.choices[0].message.content
             if article:
                 logger.info(f"Article generated by {self.model}")
@@ -215,7 +246,7 @@ class Summarizer:
             if not allow_mock:
                 raise LLMUnavailableError("LLM 返回空内容，拒绝生成 mock 稿件")
             return self._mock_summarize(news_items)
-            
+
         except LLMUnavailableError:
             raise
         except Exception as e:
@@ -223,9 +254,10 @@ class Summarizer:
             if not allow_mock:
                 raise LLMUnavailableError(f"LLM 调用失败: {e}") from e
             return self._mock_summarize(news_items)
-    
-    def generate_editorial_spec(self, news_items: List[NewsItem],
-                                allow_mock: bool = False) -> dict:
+
+    def generate_editorial_spec(
+        self, news_items: List[NewsItem], allow_mock: bool = False
+    ) -> dict:
         """生成「深读」结构化内容（供 src/editorial_template 渲染固定排版）。
 
         与 summarize_news 的区别：这里让模型只输出 **内容字段的 JSON**，
@@ -233,10 +265,17 @@ class Summarizer:
         """
         from src.ai_score import check_ai_score, DEFAULT_THRESHOLD
         from src.monitoring import record_ai_score
-        from src.editorial_template import (EDITORIAL_SCHEMA_DOC, EditorialSpecError, extract_json,
-                                            validate_spec, ground_numeric_blocks,
-                                            find_blacklisted_terms, normalize_meta_date,
-                                            find_ungrounded_numbers, render)
+        from src.editorial_template import (
+            EDITORIAL_SCHEMA_DOC,
+            EditorialSpecError,
+            extract_json,
+            validate_spec,
+            ground_numeric_blocks,
+            find_blacklisted_terms,
+            normalize_meta_date,
+            find_ungrounded_numbers,
+            render,
+        )
         from src.utils import html_to_text
 
         if not self.client or not news_items:
@@ -313,7 +352,8 @@ JSON 结构如下：
                 ungrounded = find_ungrounded_numbers(spec, news_content)
                 if ungrounded:
                     logger.warning(
-                        "正文中存在素材未出现的数字（请人工复核是否真实）: " + "、".join(ungrounded)
+                        "正文中存在素材未出现的数字（请人工复核是否真实）: "
+                        + "、".join(ungrounded)
                     )
 
                 # AI 味不合格就带着命中词重写一次（重试用尽则 fail-closed，
@@ -321,8 +361,13 @@ JSON 结构如下：
                 ai_passed, ai_report = check_ai_score(
                     html_to_text(render(spec)), threshold=DEFAULT_THRESHOLD
                 )
-                record_ai_score("generation", spec.get("title", ""), ai_report,
-                                DEFAULT_THRESHOLD, ai_passed)
+                record_ai_score(
+                    "generation",
+                    spec.get("title", ""),
+                    ai_report,
+                    DEFAULT_THRESHOLD,
+                    ai_passed,
+                )
                 if not ai_passed:
                     last_failure_was_ai_tone = True
                     hits = "、".join(ai_report["hit_phrases"] + ai_report["hit_vocab"])
@@ -334,9 +379,8 @@ JSON 结构如下：
                     )
                     facts = _concrete_facts(news_content)
                     if facts:
-                        ai_feedback += (
-                            "第二稿必须把这些素材里的具体事实写进正文（数字照抄，不许改）："
-                            + "；".join(facts)
+                        ai_feedback += "第二稿必须把这些素材里的具体事实写进正文（数字照抄，不许改）：" + "；".join(
+                            facts
                         )
                     raise EditorialSpecError(
                         f"AI 味过重（{ai_report['total_score']} >= {DEFAULT_THRESHOLD}）"
@@ -364,7 +408,7 @@ JSON 结构如下：
         """准备新闻素材文本"""
         """准备新闻素材文本"""
         content_parts = []
-        
+
         for i, item in enumerate(news_items, 1):
             source_info = f"[{item.source}]" if item.source else ""
             content_parts.append(f"""
@@ -372,29 +416,29 @@ JSON 结构如下：
    摘要：{item.description or "暂无摘要"}
    链接：{item.url}
 """)
-        
+
         return "\n".join(content_parts)
-    
+
     def _mock_summarize(self, news_items: List[NewsItem]) -> str:
         """模拟摘要（无 API 时使用）"""
         today = datetime.now().strftime("%Y年%m月%d日")
-        
+
         categories = self._categorize_news(news_items)
-        
+
         article_parts = [
             f"# 🎯 {today} AI 资讯日报",
             "",
             f"各位读者朋友们，大家好！今天是{today}，让我们一起来看看 AI 领域又有哪些最新动态。",
             "",
             "---",
-            ""
+            "",
         ]
-        
+
         for category, items in categories.items():
             emoji = self._get_category_emoji(category)
             article_parts.append(f"## {emoji} {category}")
             article_parts.append("")
-            
+
             for item in items:
                 article_parts.append(f"**{item.title}**")
                 if item.description:
@@ -402,31 +446,33 @@ JSON 结构如下：
                 if item.url:
                     article_parts.append(f"[原文链接]({item.url})")
                 article_parts.append("")
-        
-        article_parts.extend([
-            "---",
-            "",
-            "## 💡 今日点评",
-            "",
-            "AI 领域正在经历快速发展期，各大科技公司纷纷加码布局。" +
-            "从今天的资讯来看，大模型能力和应用场景都在持续扩展。" +
-            "建议读者朋友们持续关注这一领域的最新发展。",
-            "",
-            "---",
-            "",
-            f"📢 *本文由 AI 自动整理汇总，发布于{today}*"
-        ])
-        
+
+        article_parts.extend(
+            [
+                "---",
+                "",
+                "## 💡 今日点评",
+                "",
+                "AI 领域正在经历快速发展期，各大科技公司纷纷加码布局。"
+                + "从今天的资讯来看，大模型能力和应用场景都在持续扩展。"
+                + "建议读者朋友们持续关注这一领域的最新发展。",
+                "",
+                "---",
+                "",
+                f"📢 *本文由 AI 自动整理汇总，发布于{today}*",
+            ]
+        )
+
         logger.info("Mock summary generated")
         return "\n".join(article_parts)
-    
+
     def _categorize_news(self, news_items: List[NewsItem]) -> dict:
         """简单分类"""
         categories = {}
-        
+
         for item in news_items:
             source = item.source.lower() if item.source else ""
-            
+
             if any(kw in source for kw in ["openai"]):
                 cat = "OpenAI 动态"
             elif any(kw in source for kw in ["google", "deepmind"]):
@@ -439,13 +485,13 @@ JSON 结构如下：
                 cat = "Meta 动态"
             else:
                 cat = "行业资讯"
-            
+
             if cat not in categories:
                 categories[cat] = []
             categories[cat].append(item)
-        
+
         return categories
-    
+
     def _get_category_emoji(self, category: str) -> str:
         """获取分类 emoji"""
         emojis = {
@@ -459,36 +505,37 @@ JSON 结构如下：
         return emojis.get(category, "📌")
 
 
-def generate_article(news_items: List[NewsItem], save_to_file: bool = True,
-                     allow_mock: bool = True) -> str:
+def generate_article(
+    news_items: List[NewsItem], save_to_file: bool = True, allow_mock: bool = True
+) -> str:
     """生成文章的便捷函数
 
     allow_mock=False 时，LLM 不可用会抛 LLMUnavailableError（定时发布链路用）。
     """
     summarizer = Summarizer()
     article = summarizer.summarize_news(news_items, allow_mock=allow_mock)
-    
+
     if save_to_file:
         output_dir = Path("output")
         output_dir.mkdir(exist_ok=True)
-        
+
         today = datetime.now().strftime("%Y%m%d")
         md_filename = output_dir / f"article_{today}.md"
-        
+
         with open(md_filename, "w", encoding="utf-8") as f:
             f.write(article)
-        
+
         logger.info(f"Article saved: {md_filename}")
-    
+
     return article
 
 
 if __name__ == "__main__":
     from src.fetcher import fetch_news, get_mock_news
-    
+
     print("Testing summarizer with mock data...")
     mock_news = get_mock_news(5)
-    
+
     article = generate_article(mock_news)
-    print("\n" + "="*50)
+    print("\n" + "=" * 50)
     print(article[:2000])

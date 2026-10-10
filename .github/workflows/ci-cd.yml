@@ -45,10 +45,6 @@ jobs:
 
   lint:
     runs-on: ubuntu-latest
-    # Advisory only: the codebase is not black-formatted yet, so lint must not
-    # block builds. Flip continue-on-error to false once `black src/ main.py`
-    # has been run once and kept clean.
-    continue-on-error: true
 
     steps:
       - name: Checkout code
@@ -60,17 +56,24 @@ jobs:
           python-version: '3.11'
 
       - name: Install linting tools
+        # 版本固定：black 的格式化规则会随版本变化，浮动版本会让
+        # 「本地格式化过、CI 说没格式化过」反复出现。
         run: |
-          pip install flake8 black mypy
+          pip install "black==26.10.1" "flake8==7.4.1"
 
+      # 这一步是真门禁：全仓已跑过一次 black，从此保持干净是可做到的。
       - name: Check formatting
-        run: |
-          black --check src/ main.py
+        run: black --check src/ main.py
 
-      - name: Run linters
+      # 这一步只提示，不阻塞：现状还有约 166 条 flake8 提示（81 个未使用导入、
+      # 34 处空行带空白、8 处裸 except、8 处赋值后未使用的局部变量…）。
+      # 其中裸 except 要逐处判断该收窄成哪种异常，不适合一次性机械改完，
+      # 所以先让它看得见但不拦人，别把一个必然失败的门禁挂在那里。
+      - name: Run linters (advisory)
+        continue-on-error: true
         run: |
           flake8 src/ main.py --max-line-length=120 --ignore=E501,W503
-          mypy src/ --ignore-missing-imports || true
+          mypy src/ --ignore-missing-imports
 
   build:
     runs-on: ubuntu-latest
@@ -91,7 +94,11 @@ jobs:
   docker-push:
     runs-on: ubuntu-latest
     needs: [test]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    # 没配 Docker Hub 凭据时跳过：否则每次推送都在 "Username and password
+    # required" 上失败，红灯变成常态之后没人再看这个 pipeline。
+    if: >-
+      github.event_name == 'push' && github.ref == 'refs/heads/main' &&
+      secrets.DOCKER_USERNAME != '' && secrets.DOCKER_PASSWORD != ''
 
     steps:
       - name: Checkout

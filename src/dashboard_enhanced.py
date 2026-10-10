@@ -9,7 +9,15 @@ import json
 import logging
 from datetime import datetime, timedelta
 from pathlib import Path
-from flask import Flask, render_template_string, send_file, jsonify, request, redirect, url_for
+from flask import (
+    Flask,
+    render_template_string,
+    send_file,
+    jsonify,
+    request,
+    redirect,
+    url_for,
+)
 
 from src.config import load_config
 from src.scheduler import run_once
@@ -262,11 +270,9 @@ def dashboard():
     db = get_db()
     stats = db.get_stats()
     articles = db.get_articles(limit=10)
-    
-    return render_template_string(DASHBOARD_HTML,
-        stats=stats,
-        articles=articles,
-        stats_json=json.dumps(stats)
+
+    return render_template_string(
+        DASHBOARD_HTML, stats=stats, articles=articles, stats_json=json.dumps(stats)
     )
 
 
@@ -285,11 +291,12 @@ def articles_page():
     db = get_db()
     articles = db.get_articles(limit=50)
     stats = db.get_stats()
-    
-    return render_template_string(DASHBOARD_HTML.replace('📈 文章发布趋势', '📄 所有文章'),
+
+    return render_template_string(
+        DASHBOARD_HTML.replace("📈 文章发布趋势", "📄 所有文章"),
         stats=stats,
         articles=articles,
-        stats_json=json.dumps(stats)
+        stats_json=json.dumps(stats),
     )
 
 
@@ -297,11 +304,13 @@ def articles_page():
 def config_page():
     """配置页面"""
     from src.config_secure import print_config_status, validate_config, load_env
+
     load_env()
-    
+
     validation = validate_config()
-    
-    html = """
+
+    html = (
+        """
     <!DOCTYPE html>
     <html>
     <head><title>Config - AI News Publisher</title></head>
@@ -309,13 +318,16 @@ def config_page():
         <div style="background: white; border-radius: 16px; padding: 30px; max-width: 600px; margin: 0 auto;">
             <h1>⚙️ Configuration Status</h1>
             <pre style="background: #f5f5f5; padding: 15px; border-radius: 8px; overflow-x: auto;">
-""" + json.dumps(validation, indent=2) + """
+"""
+        + json.dumps(validation, indent=2)
+        + """
             </pre>
             <a href="/" style="display: inline-block; margin-top: 20px; color: #667eea;">← Back to Dashboard</a>
         </div>
     </body>
     </html>
     """
+    )
     return html
 
 
