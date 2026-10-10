@@ -375,6 +375,7 @@ class NewsFetcher:
         story_ids = response.json()[:10]
 
         results = []
+        failed = 0
         with ThreadPoolExecutor(max_workers=5) as executor:
             futures = {
                 executor.submit(self._fetch_hn_story, sid): sid for sid in story_ids
@@ -384,8 +385,14 @@ class NewsFetcher:
                     story = future.result()
                     if story:
                         results.append(story)
-                except:
-                    pass
+                except Exception as error:
+                    # 单条失败不该拖垮整批，但也不能无声无息：这里要能事后对上账
+                    failed += 1
+                    logger.debug(
+                        "HackerNews 条目 %s 抓取失败: %s", futures[future], error
+                    )
+        if failed:
+            logger.warning("HackerNews 本轮 %d/%d 条抓取失败", failed, len(story_ids))
         return results
 
     def _fetch_hn_story(self, story_id: int) -> Optional[NewsItem]:
@@ -470,7 +477,7 @@ class NewsFetcher:
                 item_date = datetime.strptime(item.published_at, "%Y-%m-%d")
                 if item_date >= cutoff:
                     filtered.append(item)
-            except:
+            except (TypeError, ValueError):
                 filtered.append(item)
         return filtered
 
@@ -482,7 +489,7 @@ class NewsFetcher:
 
             dt = parsedate_to_datetime(date_str)
             return dt.strftime("%Y-%m-%d")
-        except:
+        except (TypeError, ValueError, OverflowError):
             return datetime.now().strftime("%Y-%m-%d")
 
 

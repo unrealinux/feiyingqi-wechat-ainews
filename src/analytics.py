@@ -74,7 +74,7 @@ class Analytics:
             try:
                 month = article["date"][:7]  # YYYY-MM
                 by_month[month] += 1
-            except:
+            except (KeyError, TypeError):
                 pass
 
         return dict(sorted(by_month.items())[-6:])  # 最近 6 个月

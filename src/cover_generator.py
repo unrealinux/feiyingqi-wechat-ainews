@@ -128,6 +128,8 @@ class CoverGenerator:
 
         # 字体缓存
         self._font_cache: Dict[Tuple[str, int], ImageFont.FreeTypeFont] = {}
+        # 字体回退只告警一次：否则每张封面都刷一条，最后没人看
+        self._font_fallback_warned = False
 
         # 预加载常用字体路径
         self._font_paths = [
@@ -436,7 +438,7 @@ class CoverGenerator:
                 bbox = draw.textbbox((0, 0), line, font=font)
                 line_width = bbox[2] - bbox[0]
                 line_height = bbox[3] - bbox[1]
-            except:
+            except (AttributeError, OSError, TypeError, ValueError):
                 line_width = len(line) * 24
                 line_height = 24
 
@@ -454,7 +456,7 @@ class CoverGenerator:
             try:
                 bbox = draw.textbbox((0, 0), line, font=font)
                 line_width = bbox[2] - bbox[0]
-            except:
+            except (AttributeError, OSError, TypeError, ValueError):
                 line_width = len(line) * 24
 
             x = (self.width - line_width) // 2
@@ -627,8 +629,12 @@ class CoverGenerator:
             font = ImageFont.truetype(font_path, size)
             self._font_cache[cache_key] = font
             return font
-        except:
-            # 如果加载失败，返回默认字体
+        except (OSError, ValueError) as error:
+            # 加载失败会回退成默认字体，封面观感会变：至少要说一次，
+            # 否则「看起来正常但变丑了」是查不出来的
+            if not self._font_fallback_warned:
+                logger.warning("字体 %s 加载失败，已回退默认字体：%s", font_path, error)
+                self._font_fallback_warned = True
             return ImageFont.load_default()
 
     def _hex_to_rgb(self, hex_color: str) -> Tuple[int, int, int]:

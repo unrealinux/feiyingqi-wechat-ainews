@@ -730,8 +730,9 @@ def run_custom_article(args=None):
                 print(
                     f"   已导出 HTML: output/article_{datetime.now().strftime('%Y%m%d')}.html"
                 )
-            except:
-                pass
+            except Exception as error:
+                # 导出 HTML 是附加动作，失败不影响主流程，但必须说出来
+                print(f"   导出 HTML 失败（已跳过）: {error}")
 
         elapsed = (datetime.now() - start_time).total_seconds()
 
