@@ -15,7 +15,7 @@ Editorial Template - 「深读」排版渲染器
 
 import html
 import re
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 # 颜色（取自母版，勿随意改，改了整站观感就不统一了）
 BG = "#F7F4EE"
