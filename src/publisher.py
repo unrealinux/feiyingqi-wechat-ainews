@@ -837,6 +837,16 @@ class WeChatPublisher:
             return None
 
 
+def _title_not_in_body(title: str, plain_text: str) -> bool:
+    """标题与正文对不上？（防止把 A 篇的标题配到 B 篇的正文上）
+
+    2026-10-10 真实事故：复用 output/article_*.html 发草稿时，标题是手写的、
+    正文已被另一次运行覆盖，结果草稿箱里标题写 GPT-5、正文却是另一篇。
+    """
+    norm = lambda s: re.sub(r"\s+", "", s or "")  # noqa: E731
+    return bool(title) and norm(title) not in norm(plain_text)
+
+
 def publish_article(title: str, content: str, author: str = "", 
                     digest: str = "", cover_path: str = "",
                     auto_publish: bool = False, 
@@ -854,6 +864,12 @@ def publish_article(title: str, content: str, author: str = "",
     # 所有发布路径（scheduler / main / unified_publisher）都汇到这里，门禁放这里才拦得住。
     # content_is_html 时先剥标签：HTML 会稀释句长/标点分析，把 AI 味洗白。
     gate_text = html_to_text(content) if content_is_html else content
+    if content_is_html and _title_not_in_body(title, gate_text):
+        # 只告警不拦截：有些排版确实不在正文里复现标题
+        logger.warning(
+            f"标题可能不属于这篇正文（正文里找不到标题）: {title!r}。"
+            "先确认再发，否则草稿箱里会是标题/正文错配。"
+        )
     passed, report = check_ai_score(gate_text, threshold=ai_threshold)
     record_ai_score("publish_gate", title, report, ai_threshold, passed)
     if not passed:
