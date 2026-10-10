@@ -215,7 +215,7 @@ def run_once(args=None):
     from src.unified_publisher import publish_article_unified
     from src.fetcher import fetch_news
     from src.summarizer import generate_article
-    from src.mock_data import get_mock_news
+    from src.fetcher import get_mock_news
     
     print("\n" + "="*50)
     print("🚀 AI News Publisher - 开始运行")
@@ -311,7 +311,7 @@ def generate_only():
     """仅生成文章"""
     from src.fetcher import fetch_news
     from src.summarizer import generate_article
-    from src.mock_data import get_mock_news
+    from src.fetcher import get_mock_news
     
     print("\n📰 获取新闻...")
     news_items = fetch_news()
@@ -474,7 +474,7 @@ def run_test_mode():
     """测试模式"""
     from src.fetcher import fetch_news
     from src.summarizer import generate_article
-    from src.mock_data import get_mock_news
+    from src.fetcher import get_mock_news
     
     print("\n🧪 测试模式")
     print("="*50)
@@ -557,7 +557,7 @@ def run_config_validation():
 
 def run_mock_mode():
     """使用模拟数据运行"""
-    from src.mock_data import get_mock_news
+    from src.fetcher import get_mock_news
     from src.summarizer import generate_article
     from src.unified_publisher import publish_article_unified
     
