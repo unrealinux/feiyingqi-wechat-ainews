@@ -43,12 +43,14 @@ class FakeClient:
     def __init__(self, payloads):
         self._payloads = payloads
         self.prompts = []
+        self.system_prompts = []
         self.temperatures = []
         self.chat = self
         self.completions = self
 
     def create(self, **kwargs):
         self.prompts.append(kwargs["messages"][-1]["content"])
+        self.system_prompts.append(kwargs["messages"][0]["content"])
         self.temperatures.append(kwargs["temperature"])
         payload = self._payloads[min(len(self.prompts) - 1, len(self._payloads) - 1)]
         return SimpleNamespace(
@@ -90,6 +92,18 @@ def test_sloppy_first_draft_is_rewritten_with_feedback(summarizer):
         "AI 味重写要放开温度，否则同一模型只会再写一遍同款套话"
     )
     assert spec["lead"][0] == HUMAN
+
+
+def test_system_prompt_carries_the_ai_tell_rules(summarizer):
+    """humanizer 的 AI 腔结构禁令必须真的送到模型（不是写在注释里好看）。"""
+    summarizer.client = FakeClient([_spec(HUMAN)])
+
+    summarizer.generate_editorial_spec(_news(), allow_mock=False)
+
+    sent = summarizer.client.system_prompts[0]
+    assert "不是 X 而是 Y" in sent, "最强的那条 tell（不是 X 而是 Y）必须在 system prompt 里"
+    assert "单独成段的收尾短句" in sent
+    assert "硬凑三项排比" in sent
 
 
 def test_fail_closed_when_both_drafts_are_sloppy(summarizer):
