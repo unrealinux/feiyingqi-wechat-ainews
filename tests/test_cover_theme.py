@@ -16,8 +16,9 @@ class TestKeywordThemes:
         assert pick_theme("具身智能：机器人如何理解物理世界") == "robot"
 
     def test_agent_and_tool_articles_get_a_desk(self):
-        assert pick_theme("智能体团队怎么分工") == "workbench"
-        assert pick_theme("AI 笔记工具横评") == "workbench"
+        # 同分平局会按日期选，断言“落在桌面场景”而不是具体哪个（都不是工厂/机房）
+        for title in ("智能体团队怎么分工", "AI 笔记工具横评"):
+            assert pick_theme(title) in {"office", "workbench"}, title
 
     def test_dev_tools_get_a_desk_not_a_factory(self):
         # office/workbench 都是“桌面”场景，两个都算对；关键是别出工厂/机房/芯片
