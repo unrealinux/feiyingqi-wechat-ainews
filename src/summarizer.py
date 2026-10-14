@@ -272,12 +272,19 @@ class Summarizer:
             return self._mock_summarize(news_items)
 
     def generate_editorial_spec(
-        self, news_items: List[NewsItem], allow_mock: bool = False
+        self,
+        news_items: List[NewsItem],
+        allow_mock: bool = False,
+        extra_instruction: str = "",
     ) -> dict:
         """生成「深读」结构化内容（供 src/editorial_template 渲染固定排版）。
 
         与 summarize_news 的区别：这里让模型只输出 **内容字段的 JSON**，
         排版由本地模版确定性拼装，避免模型手写 CSS 造成各篇观感漂移。
+
+        Args:
+            extra_instruction: 追回到 user prompt 的额外约束。用于非常规素材源，
+                比如“蓝皮书是社区整理的，出处要写清、界面/价格以官方为准”。
         """
         from src.ai_score import check_ai_score, DEFAULT_THRESHOLD
         from src.monitoring import record_ai_score
@@ -342,7 +349,10 @@ JSON 结构如下：
                     model=self.model,
                     messages=[
                         {"role": "system", "content": system_prompt},
-                        {"role": "user", "content": user_prompt + ai_feedback},
+                        {
+                            "role": "user",
+                            "content": user_prompt + extra_instruction + ai_feedback,
+                        },
                     ],
                     # 第二次：结构性错误（JSON 不合规/译名错）要更保守，AI 味重写要更放得开
                     # —— 否则同一个模型只会把同款套话再写一遍。
