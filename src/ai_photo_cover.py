@@ -77,12 +77,14 @@ _THEMES = {
         ),
     },
     "robot": {
+        # “自动化”故意不放这里：“XX 自动化”在 AI 资讯里多半指流程/办公自动化，
+        # 真工业场景的标题几乎都会同时出现“机器人/机械/工厂/产线”，照样能命中。
         "keywords": [
             "机器人",
             "具身",
             "机械",
-            "自动化",
             "工厂",
+            "产线",
             "制造",
             "无人",
             "驾驶",
@@ -149,6 +151,12 @@ _THEMES = {
             "生态",
             "合作",
             "大会",
+            "编程",
+            "代码",
+            "开发",
+            "部署",
+            "调试",
+            "IDE",
         ],
         "prompt": (
             "Photorealistic modern tech workspace at dusk: ultrawide curved monitors showing "
@@ -174,6 +182,12 @@ _THEMES = {
             "岗位",
             "简历",
             "会议纪要",
+            "自动化",
+            "智能体",
+            "Agent",
+            "工具",
+            "横评",
+            "工作流",
         ],
         "prompt": (
             "Photorealistic editorial photograph of a bright modern office desk in daylight: "
