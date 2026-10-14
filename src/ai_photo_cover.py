@@ -157,6 +157,33 @@ _THEMES = {
             "shallow depth of field, editorial photography. " + _NO_TEXT
         ),
     },
+    # 办公 AI 工具/职场工作台类文章用这个：要的是“桌面 + 多任务面板 + 职场”，
+    # 而不是 industrial 场景。不要指望关键词能猜对（“自动化”会被 robot 抢走），
+    # 产品类文章请在调用方显式传 theme="workbench"。
+    "workbench": {
+        "keywords": [
+            "工作台",
+            "职场",
+            "同事",
+            "助理",
+            "助手",
+            "文档",
+            "表格",
+            "汇报",
+            "日报",
+            "岗位",
+            "简历",
+            "会议纪要",
+        ],
+        "prompt": (
+            "Photorealistic editorial photograph of a bright modern office desk in daylight: "
+            "an open laptop next to a second monitor showing abstract side-by-side task panels "
+            "and progress bars, a paper notebook, a coffee cup, a smartphone, "
+            "soft window light from the left, clean minimal workspace, no people, "
+            "shallow depth of field, muted warm grey and cool blue color grading, "
+            "shot on 35mm lens, commercial photography quality. " + _NO_TEXT
+        ),
+    },
 }
 
 _FONT_CANDIDATES = [

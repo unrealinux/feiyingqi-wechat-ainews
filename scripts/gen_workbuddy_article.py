@@ -112,7 +112,7 @@ def publish_reviewed(preview_path: str) -> int:
         print(f"生成封面: {cover}")
         from src.ai_photo_cover import generate_ai_photo_cover
 
-        ok, theme = generate_ai_photo_cover(title, cover)
+        ok, theme = generate_ai_photo_cover(title, cover, theme="workbench")
         print(f"  封面 {'成功' if ok else '失败'}（主题 {theme}）")
         if not ok:
             cover = ""
