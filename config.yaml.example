@@ -48,7 +48,7 @@ news:
     - "大模型 国产"
     - "AI 科技"
   max_results_per_search: 10
-  max_news: 15
+  max_news: 24
   exclude_keywords:
     - "广告"
     - "招聘"

@@ -6,6 +6,7 @@ AI News Fetcher - 高性能新闻获取模块
 """
 
 import os
+import re
 import hashlib
 import logging
 from datetime import datetime, timedelta
@@ -17,6 +18,7 @@ import time
 from src.config import load_config, get_news_config
 from src.proxy import get_requests_proxy, is_proxy_enabled
 from src.mock_data import is_mock_mode_enabled, generate_mock_news
+from src.utils import html_to_text
 
 logging.basicConfig(
     level=logging.INFO,
@@ -75,6 +77,17 @@ class NewsFetcher:
         "36kr": "https://36kr.com/feed/",
         "量子位": "https://www.qbitai.com/feed/",
         "MIT Tech Review": "https://www.technologyreview.com/feed/",
+        # AI 工具更新源（2026-10 接）：选的是有官方 changelog/release notes 的源，
+        # 素材里带版本号和具体功能，不靠模型凭记忆写工具参数。
+        "Google AI Blog": "https://blog.google/technology/ai/rss/",
+        "DeepMind Blog": "https://deepmind.google/blog/rss.xml",
+        "HuggingFace Blog": "https://huggingface.co/blog/feed.xml",
+        "Simon Willison": "https://simonwillison.net/atom/everything/",
+        "Cursor Changelog": "https://cursor.com/changelog/rss.xml",
+        "ollama Releases": "https://github.com/ollama/ollama/releases.atom",
+        "LangChain Releases": "https://github.com/langchain-ai/langchain/releases.atom",
+        "ComfyUI Releases": "https://github.com/comfyanonymous/ComfyUI/releases.atom",
+        "Open WebUI Releases": "https://github.com/open-webui/open-webui/releases.atom",
     }
 
     AI_NEWS_SITES = [
@@ -354,12 +367,16 @@ class NewsFetcher:
         for entry in feed.entries[:3]:
             title = entry.get("title", "")
             if title:
+                # release notes / blog 的 summary 是 HTML，标签会原样进 prompt 素材，
+                # 白占 token 还干扰排版。剥成纯文本再截断。
+                summary = html_to_text(entry.get("summary", "") or "")
+                summary = re.sub(r"\s+", " ", summary).strip()
                 results.append(
                     NewsItem(
                         title=title,
                         url=entry.get("link", ""),
                         source=name,
-                        description=(entry.get("summary", "") or "")[:200],
+                        description=summary[:200],
                         published_at=self._parse_date(entry.get("published", "")),
                     )
                 )

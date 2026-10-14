@@ -106,6 +106,17 @@ def test_system_prompt_carries_the_ai_tell_rules(summarizer):
     assert "硬凑三项排比" in sent
 
 
+def test_topic_prefers_tool_level_changes(summarizer):
+    """选题要往"工具/产品变了什么、怎么用"走，不是抽象趋势综述。"""
+    summarizer.client = FakeClient([_spec(HUMAN)])
+
+    summarizer.generate_editorial_spec(_news(), allow_mock=False)
+
+    user_prompt = summarizer.client.prompts[0]
+    assert "工具/产品层面的具体变化" in user_prompt
+    assert "该怎么用" in user_prompt
+
+
 def test_fail_closed_when_both_drafts_are_sloppy(summarizer):
     summarizer.client = FakeClient([_spec(SLOP), _spec(SLOP)])
 
