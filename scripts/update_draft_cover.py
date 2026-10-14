@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""换掉草稿箱里某篇草稿的封面（标题、正文不动）。
+r"""换掉草稿箱里某篇草稿的封面（标题、正文不动）。
 
 用途：封面配错了图（例如主题选成工业机械臂）要重配。只能在**草稿**上改：
 已经群发/发布出去的文章，封面由平台定死，API 改不了。
@@ -9,12 +9,13 @@
     python scripts/update_draft_cover.py output/xxx.jpg --index 1  # 改列表里第 2 篇
     python scripts/update_draft_cover.py --list                    # 只看不改
 
-已知微信坑（2026-10 实测）：
-  - draft/update 写中文 author会报 45110 author size out of limit（"AI Observer"
-    这种 ASCII 就不报）。所以本脚本不改 author，而省略 author 会把原有署名**清空**。
-    要在草稿上保留“AI前沿观察”，得在公众号后台手动填（或建草稿时就用 create_draft）。
-  - 接口返回 Content-Type: text/plain（无 charset），requests 会按 ISO-8859-1 解，
-    中文全变乱码；本脚本自己按 UTF-8 解。
+两个只能用血换来的微信坑（2026-10 实测）：
+  1. **请求必须发原始 UTF-8**：用 requests 的 `json=` 会把非 ASCII 转成 \uXXXX，
+     draft/update 把这些转义序列当普通字符存了 —— 标题/正文/作者全变乱码，
+     且中文 author 会报 45110 author size out of limit。
+     照 src/publisher.create_draft 的做法：json.dumps(ensure_ascii=False) + data=。
+  2. **响应要自己按 UTF-8 解**：返回 Content-Type: text/plain（无 charset），
+     requests 按 ISO-8859-1 解，中文全变乱码。
 """
 
 import argparse
@@ -43,10 +44,15 @@ def _plain(html):
 
 
 def _post_json(url, token, payload, timeout=20):
-    """微信接口返回 Content-Type: text/plain（无 charset），requests 会按 ISO-8859-1 解，
-    中文全变乱码。必须自己按 UTF-8 解（好在 latin-1/UTF-8 往返对字节是无损的）。"""
+    """发原始 UTF-8 的 JSON（不能用 requests 的 json=，见文件头坑 1），
+    并自己按 UTF-8 解响应（坑 2）。"""
+    body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
     resp = requests.post(
-        url, params={"access_token": token}, json=payload, timeout=timeout
+        url,
+        params={"access_token": token},
+        data=body,
+        headers={"Content-Type": "application/json"},
+        timeout=timeout,
     )
     return json.loads(resp.content.decode("utf-8"))
 
@@ -63,9 +69,7 @@ def main():
     parser.add_argument("image", nargs="?", help="新封面图片路径（1440x810）")
     parser.add_argument("--index", type=int, default=0, help="改第几篇（默认最新一篇）")
     parser.add_argument(
-        "--author",
-        default="",
-        help="不要改（默认空）：微信 update 写中文 author 会报 45110，署名请在后台填",
+        "--author", default=None, help="默认沿用原署名；显式传空串则清空"
     )
     parser.add_argument("--list", action="store_true", help="只列出草稿，不改")
     args = parser.parse_args()
@@ -92,11 +96,6 @@ def main():
     draft = drafts[args.index]
     item = draft["content"]["news_item"][0]
     old_thumb = item.get("thumb_media_id", "")
-    if item.get("author"):
-        print(
-            f"注意：本篇原署名为 {item['author']!r}，但 draft/update 写不了中文 author，"
-            "本次更新后署名会被清空，请到后台手动填回。"
-        )
     new_thumb = publisher._upload_media(args.image, "image")
     if not new_thumb:
         print("封面素材上传失败，未做任何修改")
@@ -105,8 +104,7 @@ def main():
 
     articles = {
         "title": item["title"],
-        # author 留空：微信 update 写中文 author 报 45110（见文件头）
-        "author": args.author,
+        "author": item.get("author", "") if args.author is None else args.author,
         "digest": item.get("digest", ""),
         "content": item["content"],
         "content_source_url": item.get("content_source_url", ""),
@@ -128,6 +126,7 @@ def main():
     same_text = _plain(after["content"]) == _plain(item["content"])
     print(f"标题        : {after['title']}")
     print(f"封面已更新  : {(after.get('thumb_media_id') or '')[:16]}…")
+    print(f"标题/署名   : {after['title']} / {after.get('author')}")
     print(f"正文是否变动: {'否' if same_text else '是（注意核对）'}")
     return 0
 
