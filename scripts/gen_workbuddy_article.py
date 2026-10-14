@@ -5,11 +5,13 @@
 WorkBuddy 参数 —— 这是走"工具怎么用"这条路的前提。
 
 用法：
-    python scripts/gen_workbuddy_article.py [--chapters N] [--out output/preview_workbuddy.html]
+    python scripts/gen_workbuddy_article.py            # 生成预览（不建草稿）
+    python scripts/gen_workbuddy_article.py --publish  # 把审过的预览发成草稿（一天最多一篇）
 """
 
 import argparse
 import sys
+from datetime import datetime
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -29,6 +31,7 @@ for _s in (sys.stdout, sys.stderr):
 SKILL_DIR = (
     Path.home() / ".agents/skills/workbuddy-guide/skills/workbuddy-guide/references"
 )
+BODY_FILE = Path("output/workbuddy_body.html")
 SOURCE_LABEL = "《WorkBuddy 实战蓝皮书》（社区整理，非官方文档）"
 
 EXTRA_INSTRUCTION = (
@@ -78,13 +81,70 @@ def build_material(chapter_count: int):
     return items
 
 
+def publish_reviewed(preview_path: str) -> int:
+    """把已审阅的预览发成草稿：不重新生成正文，否则发的就不是你审的那一篇。
+
+    AGENTS.md：一天最多一篇草稿。当天已经发过就拒绝，不靠人记得。
+    """
+    import re
+
+    from src.publisher import count_drafts_created_today, publish_article
+
+    preview = Path(preview_path)
+    if not BODY_FILE.exists() or not preview.exists():
+        print(f"没有可发的正文（先跑一次不带 --publish 的生成）: {BODY_FILE}")
+        return 1
+
+    already = count_drafts_created_today()
+    if already >= 1:
+        print(f"今天草稿箱里已有 {already} 篇，按 AGENTS.md 每天 ≤1 篇，拒绝再发。")
+        print("要今天发就先人工处理掉当天那篇，或明天再跑。")
+        return 1
+
+    match = re.search(
+        r"<title>(.*?)</title>", preview.read_text(encoding="utf-8"), re.S
+    )
+    title = (match.group(1).strip() if match else "").replace(chr(10), " ")
+    content = BODY_FILE.read_text(encoding="utf-8")
+
+    cover = f"output/workbuddy_cover_{datetime.now().strftime('%Y%m%d')}.jpg"
+    if not Path(cover).exists():
+        print(f"生成封面: {cover}")
+        from src.ai_photo_cover import generate_ai_photo_cover
+
+        ok, theme = generate_ai_photo_cover(title, cover)
+        print(f"  封面 {'成功' if ok else '失败'}（主题 {theme}）")
+        if not ok:
+            cover = ""
+
+    print(f"创建草稿（仅草稿，不群发）: {title}")
+    ok = publish_article(
+        title=title,
+        content=content,
+        author="AI前沿观察",
+        cover_path=cover,
+        content_is_html=True,
+        auto_publish=False,
+    )
+    print("成功：草稿已建" if ok else "失败：见上文日志")
+    return 0 if ok else 1
+
+
 def main():
     parser = argparse.ArgumentParser(description="用 workbuddy-guide 技能出使用向文章")
     parser.add_argument(
         "--chapters", type=int, default=len(CHAPTERS), help="用前几章做素材"
     )
     parser.add_argument("--out", default="output/preview_workbuddy.html")
+    parser.add_argument(
+        "--publish",
+        action="store_true",
+        help="把已审阅的预览发成微信草稿（不重新生成正文，不群发）",
+    )
     args = parser.parse_args()
+
+    if args.publish:
+        return publish_reviewed(args.out)
 
     if not SKILL_DIR.exists():
         print(f"找不到技能目录: {SKILL_DIR}")
@@ -108,6 +168,8 @@ def main():
         f"<title>{title}</title></head><body style='background:#EDEAE3'>{html}</body></html>",
         encoding="utf-8",
     )
+    # 正文单独存一份：--publish 用的是这一份，也就是人看过的那一版
+    BODY_FILE.write_text(html, encoding="utf-8")
 
     from src.utils import html_to_text
 

@@ -168,6 +168,17 @@ def run_once() -> bool:
     logger.info("=" * 50)
 
     try:
+        # AGENTS.md：一天最多一篇草稿。当天已经人工发过就自动让路，
+        # 免得“定时一篇 + 手动一篇”变成一天两篇。
+        from src.publisher import count_drafts_created_today
+
+        already = count_drafts_created_today()
+        if already >= 1:
+            logger.info(
+                f"今天已有 {already} 篇草稿，按 AGENTS.md 每天 ≤1 篇跳过本次产出"
+            )
+            return True
+
         logger.info("\n[1/4] Fetching latest AI news...")
         news_items = fetch_news()
 

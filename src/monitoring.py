@@ -19,6 +19,9 @@ logger = logging.getLogger(__name__)
 # 告警默认发不出去）。写文件是零配置、事后可查的那一层。
 AI_GATE_LOG = Path("logs/ai_gate.jsonl")
 ALERT_LOG = Path("logs/alerts.jsonl")
+# 本地建草稿台账：微信草稿箱只装“未发布”的草稿，发出去/删掉就不在列表里了，
+# 所以 AGENTS.md 的“一天 ≤1 篇”不能只靠 draft/batchget 数。
+DRAFT_LEDGER = Path("logs/drafts_created.jsonl")
 
 
 def _append_jsonl(path: Path, record: Dict) -> None:
@@ -55,17 +58,8 @@ def record_ai_score(
 
 
 def read_ai_scores(path: Optional[Path] = None) -> List[Dict]:
-    """读回历史打分记录（文件不存在/单行损坏都不报错）。"""
-    path = path or AI_GATE_LOG
-    if not path.exists():
-        return []
-    records = []
-    for line in path.read_text(encoding="utf-8").splitlines():
-        try:
-            records.append(json.loads(line))
-        except json.JSONDecodeError:
-            continue
-    return records
+    """读回历史打分记录。"""
+    return _read_jsonl(path or AI_GATE_LOG)
 
 
 def summarize_ai_scores(records: List[Dict]) -> Dict:
@@ -96,6 +90,39 @@ def _percentile(sorted_values: List[float], pct: float) -> Optional[float]:
         len(sorted_values) - 1, int(round((pct / 100) * (len(sorted_values) - 1)))
     )
     return round(float(sorted_values[idx]), 1)
+
+
+def record_draft_created(title: str, media_id: str = "") -> None:
+    """记一笔“本地刚建了一篇草稿”。失败只告警，不能让发布流程挂掉。"""
+    _append_jsonl(
+        DRAFT_LEDGER,
+        {
+            "time": datetime.now().isoformat(timespec="seconds"),
+            "title": title[:80],
+            "media_id": media_id,
+        },
+    )
+
+
+def count_local_drafts_today() -> int:
+    """本地台账里今天建了几篇草稿。"""
+    today = datetime.now().strftime("%Y-%m-%d")
+    return sum(
+        1 for r in _read_jsonl(DRAFT_LEDGER) if str(r.get("time", "")).startswith(today)
+    )
+
+
+def _read_jsonl(path: Path) -> List[Dict]:
+    """读 JSONL，文件不存在/单行损坏都不报错。"""
+    if not path.exists():
+        return []
+    rows = []
+    for line in path.read_text(encoding="utf-8").splitlines():
+        try:
+            rows.append(json.loads(line))
+        except json.JSONDecodeError:
+            continue
+    return rows
 
 
 def record_alert(reason: str) -> None:

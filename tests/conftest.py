@@ -40,3 +40,11 @@ def ensure_config_yaml():
     finally:
         if created and target.exists():
             target.unlink()
+
+
+@pytest.fixture(autouse=True)
+def isolate_draft_ledger(tmp_path, monkeypatch):
+    """建草稿台账同理：测试不许往仓库 logs/ 写。"""
+    from src import monitoring
+
+    monkeypatch.setattr(monitoring, "DRAFT_LEDGER", tmp_path / "drafts_created.jsonl")

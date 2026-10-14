@@ -129,7 +129,8 @@ class TestScheduler(unittest.TestCase):
         from unittest.mock import patch, MagicMock
         from src.scheduler import run_once
 
-        with patch("src.fetcher.fetch_news", return_value=[MagicMock()]) as m_fetch, \
+        with patch("src.publisher.count_drafts_created_today", return_value=0), \
+             patch("src.fetcher.fetch_news", return_value=[MagicMock()]) as m_fetch, \
              patch("src.summarizer.Summarizer.generate_editorial_spec",
                    return_value={"title": "单元测试标题"}) as m_llm, \
              patch("src.editorial_template.draft_title", return_value="单元测试标题"), \
@@ -157,7 +158,8 @@ class TestScheduler(unittest.TestCase):
         from src.scheduler import run_once
         from src.summarizer import LLMUnavailableError
 
-        with patch("src.fetcher.fetch_news", return_value=[MagicMock()]), \
+        with patch("src.publisher.count_drafts_created_today", return_value=0), \
+             patch("src.fetcher.fetch_news", return_value=[MagicMock()]), \
              patch("src.summarizer.Summarizer.generate_editorial_spec",
                    side_effect=LLMUnavailableError("no llm")), \
              patch("src.publisher.publish_article") as m_publish:
@@ -172,7 +174,8 @@ class TestScheduler(unittest.TestCase):
         from src.scheduler import run_once
         from src.summarizer import LLMUnavailableError
 
-        with patch("src.fetcher.fetch_news", return_value=[MagicMock()]), \
+        with patch("src.publisher.count_drafts_created_today", return_value=0), \
+             patch("src.fetcher.fetch_news", return_value=[MagicMock()]), \
              patch("src.summarizer.Summarizer.generate_editorial_spec",
                    side_effect=LLMUnavailableError("AI 味过重（56.0 >= 45.0）")), \
              patch("src.publisher.publish_article") as m_publish, \
@@ -201,7 +204,8 @@ class TestScheduler(unittest.TestCase):
         _first_thin_then_ok.calls = 0
         extra_item = MagicMock()
 
-        with patch("src.fetcher.fetch_news", return_value=[extra_item]) as m_fetch, \
+        with patch("src.publisher.count_drafts_created_today", return_value=0), \
+             patch("src.fetcher.fetch_news", return_value=[extra_item]) as m_fetch, \
              patch("src.summarizer.Summarizer.generate_editorial_spec",
                    side_effect=_first_thin_then_ok) as m_llm, \
              patch("src.editorial_template.draft_title", return_value="单元测试标题"), \
@@ -232,6 +236,21 @@ class TestScheduler(unittest.TestCase):
 
         with patch("src.fetcher.fetch_news", side_effect=RuntimeError("断网")):
             self.assertEqual(_refetch_more(original)[0].url, "https://a.com")
+    def test_run_once_skips_when_today_quota_is_used(self):
+        """当天已有草稿时，定时任务必须自动让路（AGENTS.md 每天 ≤1 篇）。"""
+        from unittest.mock import patch
+        from src.scheduler import run_once
+
+        with patch("src.publisher.count_drafts_created_today", return_value=1), \
+             patch("src.fetcher.fetch_news") as m_fetch, \
+             patch("src.summarizer.Summarizer.generate_editorial_spec") as m_llm, \
+             patch("src.publisher.publish_article") as m_publish:
+            result = run_once()
+
+        self.assertTrue(result, "让路不算失败")
+        self.assertFalse(m_llm.called, "已有草稿时不该再花 LLM 生成")
+        self.assertFalse(m_fetch.called, "已有草稿时不必抓素材")
+        self.assertFalse(m_publish.called)
 
 
 class TestDeduplication(unittest.TestCase):

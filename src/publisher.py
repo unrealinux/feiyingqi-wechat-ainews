@@ -19,7 +19,11 @@ from src.config import load_config, get_wechat_config, get_publish_config
 from src.proxy import get_requests_proxy, is_proxy_enabled
 from src.validate_config import validate_config
 from src.errors import with_retry, AppError, ErrorType
-from src.monitoring import record_ai_score
+from src.monitoring import (
+    count_local_drafts_today,
+    record_ai_score,
+    record_draft_created,
+)
 from src.utils import html_to_text
 
 logging.basicConfig(
@@ -339,6 +343,7 @@ class WeChatPublisher:
             media_id = _create_draft()
             if media_id:
                 logger.info(f"Draft created: {media_id}")
+                record_draft_created(title, media_id)
                 if self._health_checker:
                     self._health_checker.inc_published()
                 return media_id
@@ -937,6 +942,51 @@ class WeChatPublisher:
         except Exception as e:
             logger.error(f"发布异常: {e}")
             return None
+
+
+def count_drafts_created_today() -> int:
+    """今天已经建了几篇草稿。取本地台账与微信未发布草稿数的较大值。
+
+    AGENTS.md 红线：“一次会话/一天内，禁止创建超过 1 篇正式内容草稿”。
+    定时任务每天自动跑，当天已手动发过就必须能自己发现并让路。
+
+    两个信号缺一不可：draft/batchget 只返回**未发布**的草稿（发出去或删掉就不在列表里），
+    本地台账又能覆盖到“台账写过但对方已处理后端数据”的情况。
+    """
+    local = count_local_drafts_today()
+    remote = 0
+    try:
+        publisher = WeChatPublisher()
+        token = publisher.get_access_token()
+        if not token:
+            logger.warning("拿不到 access_token，只看本地台账")
+        else:
+            resp = requests.post(
+                "https://api.weixin.qq.com/cgi-bin/draft/batchget",
+                params={"access_token": token},
+                json={"offset": 0, "count": 20, "no_content": 1},
+                timeout=15,
+            ).json()
+            if resp.get("errcode"):
+                logger.warning(f"草稿列表接口报错，只看本地台账: {resp}")
+            else:
+                today = datetime.now().strftime("%Y-%m-%d")
+                remote = sum(
+                    1
+                    for item in resp.get("item", [])
+                    if datetime.fromtimestamp(item.get("update_time", 0)).strftime(
+                        "%Y-%m-%d"
+                    )
+                    == today
+                )
+    except Exception as e:
+        logger.warning(f"查微信未发布草稿数失败，只看本地台账: {e}")
+
+    if remote > local:
+        logger.warning(
+            f"微信侧未发布草稿 {remote} 篇 > 本地台账 {local} 篇（有人手动建过？）"
+        )
+    return max(local, remote)
 
 
 def _title_not_in_body(title: str, plain_text: str) -> bool:
