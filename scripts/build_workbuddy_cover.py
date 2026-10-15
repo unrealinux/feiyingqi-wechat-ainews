@@ -21,6 +21,12 @@ W, H = 1440, 810
 THUMB_RATIO = 2.35  # 微信列表缩略图比例：关键信息要落在中间这条带里
 
 BG = (216, 241, 75)  # 蓝皮书品牌荧光绿
+
+# —— 文案：换文章时改这里就行（要和正文主题对得上，别写泛泛的“怎么用”）——
+KICKER = "WorkBuddy · 社区蓝皮书 · 10 章实操 · 2026"
+TITLE_LINES = ["WorkBuddy 自动化", "把重复劳动", "变成 Agent 资产"]
+SUBTITLE = "从 MCP 到 Skill，AI 接管日常琐碎"
+FOOTER = "这篇讲的是一次性任务怎么变成可复用资产"
 INK = (16, 16, 16)
 TILE = (255, 255, 255)
 
@@ -79,21 +85,21 @@ def build(out_path: str):
     draw_tracked(
         d,
         (84, 96),
-        "社区蓝皮书 · 10 章实操 · 2026",
+        KICKER,
         font(22, bold=False),
         INK,
         tracking=4,
     )
 
-    # 主标题（两行，超粗）
-    d.text((84, 190), "WorkBuddy 怎么用", font=font(96), fill=INK)
-    d.text((84, 310), "从第一项任务开始", font=font(96), fill=INK)
+    # 主标题（行数由 TITLE_LINES 决定，换文章只改常量）
+    for i, line in enumerate(TITLE_LINES):
+        d.text((84, 180 + i * 104), line, font=font(96), fill=INK)
 
     # 副标题
     d.text(
-        (88, 462),
-        "专家团 · Skill · 连接器 · 自动化任务",
-        font=font(38, bold=False),
+        (88, 180 + len(TITLE_LINES) * 104 + 24),
+        SUBTITLE,
+        font=font(36, bold=False),
         fill=INK,
     )
 
@@ -104,9 +110,7 @@ def build(out_path: str):
 
     # 底部黑条
     d.rectangle([0, H - 96, W, H], fill=INK)
-    d.text(
-        (84, H - 72), "把重复劳动变成可复用的系统", font=font(34, bold=False), fill=BG
-    )
+    d.text((84, H - 72), FOOTER, font=font(32, bold=False), fill=BG)
     draw_tracked(d, (W - 190, H - 66), "WB_", font(30, bold=False), BG, tracking=2)
 
     img.save(out_path, quality=93)
