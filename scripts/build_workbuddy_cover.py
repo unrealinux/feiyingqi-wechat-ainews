@@ -53,23 +53,42 @@ def draw_tracked(draw, xy, text, fnt, fill, tracking=8):
         x += draw.textlength(ch, font=fnt) + tracking
 
 
-def icon_laptop(d, x, y, s):
-    d.rectangle([x, y, x + 8 * s, y + 5 * s], outline=INK, width=s)
-    d.rectangle([x - s, y + 6 * s, x + 9 * s, y + 7 * s], fill=INK)
+def icon_clipboard(d, x, y, s):
+    """剪贴板：一份重复的活儿。"""
+    d.rectangle([x, y + s, x + 6 * s, y + 8 * s], outline=INK, width=s)
+    d.rectangle([x + 2 * s, y, x + 4 * s, y + s], fill=INK)
+    for i in range(3):
+        d.rectangle(
+            [x + s, y + (2 + 2 * i) * s, x + 5 * s, y + (3 + 2 * i) * s], fill=INK
+        )
 
 
-def icon_bot(d, x, y, s):
-    d.rectangle([x, y + s, x + 8 * s, y + 7 * s], outline=INK, width=s)
-    d.line([x + 4 * s, y + s, x + 4 * s, y - s], fill=INK, width=s)
-    d.rectangle([x + 3 * s, y - 2 * s, x + 5 * s, y], fill=INK)
-    d.rectangle([x + 2 * s, y + 3 * s, x + 3 * s, y + 4 * s], fill=INK)
-    d.rectangle([x + 5 * s, y + 3 * s, x + 6 * s, y + 4 * s], fill=INK)
+def icon_chat(d, x, y, s):
+    """对话气泡。"""
+    d.rectangle([x, y, x + 7 * s, y + 5 * s], fill=INK)
+    d.rectangle([x + s, y + 5 * s, x + 2 * s, y + 7 * s], fill=INK)
+    for i in (2, 4):
+        d.rectangle([x + i * s, y + 2 * s, x + (i + 1) * s, y + 3 * s], fill=TILE)
 
 
-def icon_case(d, x, y, s):
-    d.rectangle([x, y + s, x + 8 * s, y + 6 * s], outline=INK, width=s)
-    d.rectangle([x + 3 * s, y - s, x + 5 * s, y + s], outline=INK, width=s)
-    d.rectangle([x, y + 3 * s, x + 8 * s, y + 4 * s], fill=INK)
+def icon_clock(d, x, y, s):
+    """定时任务。"""
+    d.ellipse([x, y, x + 8 * s, y + 8 * s], outline=INK, width=s)
+    d.line([x + 4 * s, y + 4 * s, x + 4 * s, y + 1.5 * s], fill=INK, width=s)
+    d.line([x + 4 * s, y + 4 * s, x + 6 * s, y + 4.5 * s], fill=INK, width=s)
+
+
+def icon_asset(d, x, y, s):
+    """资产箱：重复劳动沉淀下来的那件东西（黑箱 + 荧光绿高光）。"""
+    d.rectangle([x, y + 3 * s, x + 9 * s, y + 8 * s], outline=INK, width=s)
+    d.rectangle([x, y + s, x + 9 * s, y + 3 * s], fill=INK)
+    d.rectangle([x + 4 * s, y + 4 * s, x + 5 * s, y + 6 * s], fill=BG)
+
+
+def arrow(d, x, y, s):
+    """像素箭头：重复 → 资产。"""
+    d.rectangle([x, y, x + 5 * s, y + s], fill=INK)
+    d.rectangle([x + 4 * s, y - 2 * s, x + 5 * s, y + 3 * s], fill=INK)
 
 
 def tile(draw, x, y, size, icon, scale=14):
@@ -103,10 +122,16 @@ def build(out_path: str):
         fill=INK,
     )
 
-    # 右侧像素图标卡（位置错落，模仿 banner 的漂浮卡）
-    tile(d, 1000, 120, 210, icon_bot)
-    tile(d, 1180, 300, 200, icon_laptop)
-    tile(d, 960, 400, 200, icon_case)
+    # 右侧底部：重复的活儿 → 一件资产（三张同样的小卡 + 箭头 + 一张大卡）
+    # 注意 y 要落在标题/副标题下方（副标题到 ~564），又不能压到底部黑条（714）
+    small, gap, flow_cy = 100, 16, 630
+    start_x = 820
+    for i, icon in enumerate((icon_clipboard, icon_chat, icon_clock)):
+        tile(d, start_x + i * (small + gap), flow_cy - small // 2, small, icon, scale=8)
+    ax = start_x + 3 * (small + gap) + 6
+    arrow(d, ax, flow_cy, 7)
+    big = 136
+    tile(d, ax + 58, flow_cy - big // 2, big, icon_asset, scale=10)
 
     # 底部黑条
     d.rectangle([0, H - 96, W, H], fill=INK)
