@@ -40,6 +40,19 @@ EXTRA_INSTRUCTION = (
     "sources 里不要写成“腾讯《WorkBuddy 实战蓝皮书》”，要写清是社区整理、并只列实际用到的章节；"
     "涉及界面、价格、额度、权限时加一句“以 WorkBuddy 官方渠道为准”。"
 )
+# --tutorial 时叠加的结构要求：操作指南不能写成“深读”
+TUTORIAL_INSTRUCTION = (
+    "\n\n本篇是**操作指南**，不是观点深读。硬要求："
+    "① kicker 写“AI 前沿观察 · 实操指南”，meta_line 写清“读者看完能干什么”；"
+    "② 第二到第四节必须是**可执行步骤**：用 steps 块（{{type: steps, items: [{{title, detail}}]}}），"
+    "title 写动作（如“在设置里接入自己的 API Key”），detail 写“在哪个界面 → 点什么 → 填什么 → 会看到什么”；不许写成概念介绍；"
+    "③ 单独一节写“容易踩的坑”：素材里写到的限制（额度/权限/本机与云端差异）+ 怎么绕；"
+    "④ 最后一节写“什么情况下不值得用”，不要堆夸张形容词；"
+    "⑤ **正文里不要写“第 N 章”这类章号**（容易标错），章号只在 sources 里出现；"
+    "⑥ 链接要把完整地址写出来（含 https://），因为这是操作指南，读者要能直接点。"
+    "标题写成读者会搜的句式（如“WorkBuddy 怎么用：从装到跑通第一个任务”），不要抽象口号。"
+)
+
 CHAPTERS = [
     ("chapters/part1-ch01.md", "第 1 章 初识 WorkBuddy"),
     ("chapters/part1-ch02.md", "第 2 章 下载、安装、登录与更新"),
@@ -137,6 +150,11 @@ def main():
     )
     parser.add_argument("--out", default="output/preview_workbuddy.html")
     parser.add_argument(
+        "--tutorial",
+        action="store_true",
+        help="按操作指南结构出稿（前置→步骤→坑→边界），而不是观点深读",
+    )
+    parser.add_argument(
         "--publish",
         action="store_true",
         help="把已审阅的预览发成微信草稿（不重新生成正文，不群发）",
@@ -157,7 +175,9 @@ def main():
     print(f"素材: {len(items)} 个章节，来自 {SKILL_DIR}")
 
     spec = Summarizer().generate_editorial_spec(
-        items, allow_mock=False, extra_instruction=EXTRA_INSTRUCTION
+        items,
+        allow_mock=False,
+        extra_instruction=EXTRA_INSTRUCTION + (TUTORIAL_INSTRUCTION if args.tutorial else ""),
     )
     title = editorial_template.draft_title(spec)
     html = editorial_template.render(spec)
@@ -169,7 +189,8 @@ def main():
         encoding="utf-8",
     )
     # 正文单独存一份：--publish 用的是这一份，也就是人看过的那一版
-    BODY_FILE.write_text(html, encoding="utf-8")
+    body_path = Path("output/workbuddy_body_tutorial.html") if args.tutorial else BODY_FILE
+    body_path.write_text(html, encoding="utf-8")
 
     from src.utils import html_to_text
 

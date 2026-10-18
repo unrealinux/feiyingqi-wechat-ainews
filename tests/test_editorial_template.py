@@ -129,3 +129,47 @@ def test_find_ungrounded_numbers_audits_prose_only():
     spec["sections"][0]["blocks"] = [{"type": "p", "text": "官方称 97.6% 的准确率，另称 88.8% 的提升"}]
     flagged = et.find_ungrounded_numbers(spec, "素材里只有 97.6%")
     assert flagged == ["88.8"]
+
+
+class TestStepsBlock:
+    """steps 块：操作指南的主干（序号 + 动作 + 会看到什么）。"""
+
+    def _spec_with_steps(self, items):
+        return _spec(sections=[
+            {"heading": "安装", "accent": "red", "blocks": [{"type": "steps", "items": items}]},
+            {"heading": "第二节", "accent": "green", "blocks": [{"type": "p", "text": "正文"}]},
+            {"heading": "第三节", "accent": "red", "blocks": [{"type": "p", "text": "正文"}]},
+        ])
+
+    def test_numbers_steps_and_keeps_detail(self):
+        html = et.render(self._spec_with_steps([
+            {"title": "下载客户端", "detail": "访问 https://example.com ，选对应系统"},
+            {"title": "初始化工作区", "detail": "选一个独立目录"},
+        ]))
+
+        assert "1.</span> <strong>下载客户端</strong>" in html
+        assert "2.</span> <strong>初始化工作区</strong>" in html
+        assert "https://example.com" in html
+        assert "选一个独立目录" in html
+
+    def test_accepts_plain_strings(self):
+        html = et.render(self._spec_with_steps(["打开设置", "接入 API Key"]))
+
+        assert "打开设置" in html and "接入 API Key" in html
+
+    def test_empty_steps_is_rejected(self):
+        with pytest.raises(et.EditorialSpecError):
+            et.render(self._spec_with_steps([]))
+
+    def test_step_without_title_is_rejected(self):
+        with pytest.raises(et.EditorialSpecError):
+            et.render(self._spec_with_steps([{"detail": "只有细节没有标题"}]))
+
+    def test_steps_survive_numeric_grounding(self):
+        """steps 里不是图表数据，不该被数字闸删掉。"""
+        spec = self._spec_with_steps([{"title": "三步走完", "detail": "第 3 步"}])
+
+        dropped = et.ground_numeric_blocks(spec, "素材里没有任何数字")
+
+        assert dropped == []
+        assert "三步走完" in et.render(spec)

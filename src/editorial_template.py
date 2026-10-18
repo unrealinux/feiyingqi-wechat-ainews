@@ -58,6 +58,10 @@ EDITORIAL_SCHEMA_DOC = """
       "blocks": [
         {"type": "p", "text": "正文段落，可用 **加粗**"},
         {"type": "bullets", "items": ["**要点**：说明", "**要点**：说明"]},
+        {"type": "steps", "items": [
+            {"title": "打开设置 → 账号", "detail": "填什么、点哪里、会看到什么"},
+            {"title": "第二步的标题", "detail": "可选"}
+        ]},
         {"type": "datacard", "accent": "red", "caption": "可选小标题",
          "lines": [{"label": "指标名", "note": "可选注释", "value": "97.6%"}]},
         {"type": "bars", "accent": "green", "caption": "图表标题",
@@ -180,6 +184,36 @@ def _quote(text: str) -> str:
     )
 
 
+def _steps(block: Dict[str, Any]) -> str:
+    """编号步骤：操作指南类内容的主干。
+
+    每步 = 步骤名 + 具体动作（detail 可选，写“会看到什么”）。
+    也容忍直接给字符串数组，但推荐 {title, detail}。
+    """
+    items = block.get("items") or []
+    if not items:
+        raise EditorialSpecError("steps 块至少要有一个步骤")
+    out = []
+    for i, item in enumerate(items, 1):
+        if isinstance(item, str):
+            title, detail = item, ""
+        else:
+            title, detail = item.get("title", ""), item.get("detail", "")
+        if not str(title).strip():
+            raise EditorialSpecError(f"steps 块第 {i} 步缺少步骤名")
+        out.append(
+            f'<p style="margin:0 0 6px; font-size:16px; line-height:1.7;">'
+            f'<span style="color:{ACCENT_PRIMARY}; font-weight:700;">{i}.</span> '
+            f"<strong>{_inline(title)}</strong></p>"
+        )
+        if detail:
+            out.append(
+                f'<p style="margin:0 0 16px; padding-left:22px; color:{MUTED}; '
+                f'font-size:15px; line-height:1.8;">{_inline(detail)}</p>'
+            )
+    return "".join(out)
+
+
 def _render_blocks(blocks: List[Dict[str, Any]]) -> str:
     out = []
     blocks = [b for b in blocks if b]
@@ -202,6 +236,8 @@ def _render_blocks(blocks: List[Dict[str, Any]]) -> str:
             out.append(_bars(block))
         elif kind == "quote":
             out.append(_quote(block.get("text", "")))
+        elif kind == "steps":
+            out.append(_steps(block))
         else:
             raise EditorialSpecError(f"未知的内容块类型: {kind!r}")
     return "".join(out)
