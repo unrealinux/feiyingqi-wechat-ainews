@@ -11,6 +11,9 @@ flask-cors>=4.0.0
 # Scheduling
 apscheduler>=3.10.0
 
+# Search (Exa)：src/fetcher.py 的 search 通道用；不给 key 时不启用
+exa-py>=1.0.0
+
 # RSS & Parsing
 feedparser>=6.0.0
 beautifulsoup4>=4.12.0
