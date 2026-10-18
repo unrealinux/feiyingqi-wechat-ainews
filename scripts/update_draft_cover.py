@@ -9,6 +9,9 @@ r"""换掉草稿箱里某篇草稿的封面（标题、正文不动）。
     python scripts/update_draft_cover.py output/xxx.jpg --index 1  # 改列表里第 2 篇
     python scripts/update_draft_cover.py --list                    # 只看不改
 
+写操作必须用 --match 指定标题里的关键词（2026-10-19 事故：默认改“列表第一篇”，
+把一篇新闻稿的封面换成了 WorkBuddy 的图）。
+
 两个只能用血换来的微信坑（2026-10 实测）：
   1. **请求必须发原始 UTF-8**：用 requests 的 `json=` 会把非 ASCII 转成 \uXXXX，
      draft/update 把这些转义序列当普通字符存了 —— 标题/正文/作者全变乱码，
@@ -22,6 +25,7 @@ import argparse
 import json
 import re
 import sys
+import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -69,13 +73,31 @@ def main():
     parser.add_argument("image", nargs="?", help="新封面图片路径（1440x810）")
     parser.add_argument("--index", type=int, default=0, help="改第几篇（默认最新一篇）")
     parser.add_argument(
+        "--match",
+        default="",
+        help="标题关键词；写操作必填，必须正好命中 1 篇，否则拒绝执行",
+    )
+    parser.add_argument(
         "--author", default=None, help="默认沿用原署名；显式传空串则清空"
     )
     parser.add_argument("--list", action="store_true", help="只列出草稿，不改")
     args = parser.parse_args()
 
+    if args.image and not args.match:
+        print("写操作必须带 --match <标题关键词>：只改标题能对上的一篇。")
+        return 1
+
     publisher = WeChatPublisher()
-    token = publisher.get_access_token()
+    token = None
+    for attempt in range(3):
+        token = publisher.get_access_token()
+        if token:
+            break
+        print(f"取 access_token 失败，重试 {attempt + 1}/3")
+        time.sleep(3)
+    if not token:
+        print("拿不到 access_token（网络问题），稍后重试")
+        return 1
     drafts = _drafts(token)
     if not drafts:
         print("草稿箱是空的")
@@ -88,6 +110,14 @@ def main():
 
     if args.list or not args.image:
         return 0
+
+    matched = [d for d in drafts if args.match in d["content"]["news_item"][0]["title"]]
+    if len(matched) != 1:
+        print(
+            f"--match {args.match!r} 命中 {len(matched)} 篇，拒绝执行（必须先确认改哪篇）。"
+        )
+        return 1
+    args.index = drafts.index(matched[0])
 
     if not Path(args.image).exists():
         print(f"找不到图片: {args.image}")
