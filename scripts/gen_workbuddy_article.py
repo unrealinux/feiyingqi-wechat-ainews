@@ -31,6 +31,7 @@ for _s in (sys.stdout, sys.stderr):
 SKILL_DIR = (
     Path.home() / ".agents/skills/workbuddy-guide/skills/workbuddy-guide/references"
 )
+BRAND_COVER = Path("output/workbuddy_cover_brand.jpg")  # 手绘品牌风封面，优先复用
 BODY_FILE = Path("output/workbuddy_body.html")
 TUTORIAL_BODY_FILE = Path("output/workbuddy_body_tutorial.html")
 SOURCE_LABEL = "《WorkBuddy 实战蓝皮书》（社区整理，非官方文档）"
@@ -121,7 +122,12 @@ def publish_reviewed(preview_path: str, body_path: Path = BODY_FILE) -> int:
     title = (match.group(1).strip() if match else "").replace(chr(10), " ")
     content = body_path.read_text(encoding="utf-8")
 
-    cover = f"output/workbuddy_cover_{datetime.now().strftime('%Y%m%d')}.jpg"
+    # 优先用手绘品牌风封面（迭代过的那版），没有再按当天日期找/生成
+    cover = (
+        str(BRAND_COVER)
+        if BRAND_COVER.exists()
+        else f"output/workbuddy_cover_{datetime.now().strftime('%Y%m%d')}.jpg"
+    )
     if not Path(cover).exists():
         print(f"生成封面: {cover}")
         from src.ai_photo_cover import generate_ai_photo_cover
