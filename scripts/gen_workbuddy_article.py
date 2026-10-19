@@ -32,6 +32,7 @@ SKILL_DIR = (
     Path.home() / ".agents/skills/workbuddy-guide/skills/workbuddy-guide/references"
 )
 BODY_FILE = Path("output/workbuddy_body.html")
+TUTORIAL_BODY_FILE = Path("output/workbuddy_body_tutorial.html")
 SOURCE_LABEL = "《WorkBuddy 实战蓝皮书》（社区整理，非官方文档）"
 
 EXTRA_INSTRUCTION = (
@@ -94,7 +95,7 @@ def build_material(chapter_count: int):
     return items
 
 
-def publish_reviewed(preview_path: str) -> int:
+def publish_reviewed(preview_path: str, body_path: Path = BODY_FILE) -> int:
     """把已审阅的预览发成草稿：不重新生成正文，否则发的就不是你审的那一篇。
 
     AGENTS.md：一天最多一篇草稿。当天已经发过就拒绝，不靠人记得。
@@ -104,8 +105,8 @@ def publish_reviewed(preview_path: str) -> int:
     from src.publisher import count_drafts_created_today, publish_article
 
     preview = Path(preview_path)
-    if not BODY_FILE.exists() or not preview.exists():
-        print(f"没有可发的正文（先跑一次不带 --publish 的生成）: {BODY_FILE}")
+    if not body_path.exists() or not preview.exists():
+        print(f"没有可发的正文（先跑一次不带 --publish 的生成）: {body_path}")
         return 1
 
     already = count_drafts_created_today()
@@ -118,7 +119,7 @@ def publish_reviewed(preview_path: str) -> int:
         r"<title>(.*?)</title>", preview.read_text(encoding="utf-8"), re.S
     )
     title = (match.group(1).strip() if match else "").replace(chr(10), " ")
-    content = BODY_FILE.read_text(encoding="utf-8")
+    content = body_path.read_text(encoding="utf-8")
 
     cover = f"output/workbuddy_cover_{datetime.now().strftime('%Y%m%d')}.jpg"
     if not Path(cover).exists():
@@ -162,7 +163,9 @@ def main():
     args = parser.parse_args()
 
     if args.publish:
-        return publish_reviewed(args.out)
+        return publish_reviewed(
+            args.out, TUTORIAL_BODY_FILE if args.tutorial else BODY_FILE
+        )
 
     if not SKILL_DIR.exists():
         print(f"找不到技能目录: {SKILL_DIR}")
@@ -177,7 +180,8 @@ def main():
     spec = Summarizer().generate_editorial_spec(
         items,
         allow_mock=False,
-        extra_instruction=EXTRA_INSTRUCTION + (TUTORIAL_INSTRUCTION if args.tutorial else ""),
+        extra_instruction=EXTRA_INSTRUCTION
+        + (TUTORIAL_INSTRUCTION if args.tutorial else ""),
     )
     title = editorial_template.draft_title(spec)
     html = editorial_template.render(spec)
@@ -189,7 +193,7 @@ def main():
         encoding="utf-8",
     )
     # 正文单独存一份：--publish 用的是这一份，也就是人看过的那一版
-    body_path = Path("output/workbuddy_body_tutorial.html") if args.tutorial else BODY_FILE
+    body_path = TUTORIAL_BODY_FILE if args.tutorial else BODY_FILE
     body_path.write_text(html, encoding="utf-8")
 
     from src.utils import html_to_text
