@@ -85,6 +85,14 @@ cd /d "%PROJECT_DIR%"
 "%PYTHON_EXE%" main.py %ARGS% >>"%LOG_FILE%" 2>&1
 set "RC=%ERRORLEVEL%"
 
+rem --- stats: append today's WeChat backend numbers (best effort; never changes RC) ---
+rem Only for the default "daily" run, and only if the collector exists.
+if /i "%ARGS%"=="daily" if exist "%PROJECT_DIR%\scripts\fetch_mp_stats.py" (
+  >>"%LOG_FILE%" echo [%TS%] python scripts/fetch_mp_stats.py
+  "%PYTHON_EXE%" "%PROJECT_DIR%\scripts\fetch_mp_stats.py" >>"%LOG_FILE%" 2>&1
+  >>"%LOG_FILE%" echo [%TS%] stats exit code %ERRORLEVEL% - ignored
+)
+
 >>"%LOG_FILE%" echo [%TS%] finished, exit code %RC%
 if "%RC%"=="0" >>"%LOG_FILE%" echo status: OK (draft created, or nothing to do)
 if "%RC%"=="1" >>"%LOG_FILE%" echo status: FAILED - see details above
