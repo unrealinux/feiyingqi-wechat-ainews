@@ -78,6 +78,12 @@ def icon_clock(d, x, y, s):
     d.line([x + 4 * s, y + 4 * s, x + 6 * s, y + 4.5 * s], fill=INK, width=s)
 
 
+def icon_laptop(d, x, y, s):
+    """客户端/桌面。"""
+    d.rectangle([x, y, x + 8 * s, y + 5 * s], outline=INK, width=s)
+    d.rectangle([x - s, y + 6 * s, x + 9 * s, y + 7 * s], fill=INK)
+
+
 def icon_asset(d, x, y, s):
     """资产箱：重复劳动沉淀下来的那件东西（黑箱 + 荧光绿高光）。"""
     d.rectangle([x, y + 3 * s, x + 9 * s, y + 8 * s], outline=INK, width=s)
@@ -96,46 +102,82 @@ def tile(draw, x, y, size, icon, scale=14):
     icon(draw, x + size * 0.2, y + size * 0.28, scale)
 
 
-def build(out_path: str):
+def build(
+    out_path: str,
+    title_lines=None,
+    kicker=None,
+    subtitle=None,
+    footer=None,
+    variant="flow",
+):
     img = Image.new("RGB", (W, H), BG)
     d = ImageDraw.Draw(img)
+
+    title_lines = title_lines or TITLE_LINES
+    kicker = kicker or KICKER
+    subtitle = subtitle or SUBTITLE
+    footer = footer or FOOTER
 
     # 左上小字
     draw_tracked(
         d,
         (84, 96),
-        KICKER,
+        kicker,
         font(22, bold=False),
         INK,
         tracking=4,
     )
 
     # 主标题（行数由 TITLE_LINES 决定，换文章只改常量）
-    for i, line in enumerate(TITLE_LINES):
+    for i, line in enumerate(title_lines):
         d.text((84, 180 + i * 104), line, font=font(96), fill=INK)
 
     # 副标题
     d.text(
-        (88, 180 + len(TITLE_LINES) * 104 + 24),
-        SUBTITLE,
+        (88, 180 + len(title_lines) * 104 + 24),
+        subtitle,
         font=font(36, bold=False),
         fill=INK,
     )
 
-    # 右侧底部：重复的活儿 → 一件资产（三张同样的小卡 + 箭头 + 一张大卡）
-    # 注意 y 要落在标题/副标题下方（副标题到 ~564），又不能压到底部黑条（714）
-    small, gap, flow_cy = 100, 16, 630
-    start_x = 820
-    for i, icon in enumerate((icon_clipboard, icon_chat, icon_clock)):
-        tile(d, start_x + i * (small + gap), flow_cy - small // 2, small, icon, scale=8)
-    ax = start_x + 3 * (small + gap) + 6
-    arrow(d, ax, flow_cy, 7)
-    big = 136
-    tile(d, ax + 58, flow_cy - big // 2, big, icon_asset, scale=10)
+    if variant == "steps":
+        # 手册版式：四张带编号的卡，表达“照着走四步”
+        icons = (icon_clipboard, icon_laptop, icon_chat, icon_clock)
+        size, gap = 112, 18
+        total = 4 * size + 3 * gap
+        start_x = W - 84 - total
+        cy = 536  # 标题/副标题下方，别压到底部黑条（714）
+        for i, icon in enumerate(icons):
+            x = start_x + i * (size + gap)
+            tile(d, x, cy, size, icon, scale=8)
+            d.text((x + size - 30, cy + size - 26), f"0{i + 1}", font=font(20), fill=BG)
+        d.text(
+            (start_x, cy + size + 26),
+            "安装 → 第一个任务 → Skill → 自动化",
+            font=font(26, bold=False),
+            fill=INK,
+        )
+    else:
+        # 流程版式：重复的活儿 → 一件资产（三张同样的小卡 + 箭头 + 一张大卡）
+        small, gap, flow_cy = 100, 16, 630
+        start_x = 820
+        for i, icon in enumerate((icon_clipboard, icon_chat, icon_clock)):
+            tile(
+                d,
+                start_x + i * (small + gap),
+                flow_cy - small // 2,
+                small,
+                icon,
+                scale=8,
+            )
+        ax = start_x + 3 * (small + gap) + 6
+        arrow(d, ax, flow_cy, 7)
+        big = 136
+        tile(d, ax + 58, flow_cy - big // 2, big, icon_asset, scale=10)
 
     # 底部黑条
     d.rectangle([0, H - 96, W, H], fill=INK)
-    d.text((84, H - 72), FOOTER, font=font(32, bold=False), fill=BG)
+    d.text((84, H - 72), footer, font=font(32, bold=False), fill=BG)
     draw_tracked(d, (W - 190, H - 66), "WB_", font(30, bold=False), BG, tracking=2)
 
     img.save(out_path, quality=93)
@@ -151,4 +193,17 @@ def build(out_path: str):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="WorkBuddy 风格封面（原创）")
     parser.add_argument("out", nargs="?", default="output/workbuddy_cover_brand.jpg")
-    build(parser.parse_args().out)
+    parser.add_argument("--variant", choices=["flow", "steps"], default="flow")
+    parser.add_argument("--title", default="", help="标题行，用 | 分隔")
+    parser.add_argument("--kicker", default="")
+    parser.add_argument("--subtitle", default="")
+    parser.add_argument("--footer", default="")
+    args = parser.parse_args()
+    build(
+        args.out,
+        title_lines=[t.strip() for t in args.title.split("|")] if args.title else None,
+        kicker=args.kicker or None,
+        subtitle=args.subtitle or None,
+        footer=args.footer or None,
+        variant=args.variant,
+    )
