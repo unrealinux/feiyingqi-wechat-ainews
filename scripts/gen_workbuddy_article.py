@@ -261,6 +261,8 @@ def publish_reviewed(preview_path: str, body_path: Path = BODY_FILE) -> int:
         auto_publish=False,
     )
     print("成功：草稿已建" if ok else "失败：见上文日志")
+    if not ok:
+        _notify_failure(f"建草稿失败（{preset['name']}），见日志")
     return 0 if ok else 1
 
 
@@ -354,6 +356,20 @@ def _ledger_workbuddy_titles() -> list:
     return titles
 
 
+def _notify_failure(reason: str) -> None:
+    """定时任务失败要有声音：2026-10-27 16:00 那次 LLM 连接失败，没人知道。
+
+    复用调度器已有的通知通道；通知本身失败不得影响退出码。
+    """
+    try:
+        from src.monitoring import record_alert, send_run_notification
+
+        send_run_notification("error", {"error": reason})
+        record_alert(f"WorkBuddy 定时任务失败: {reason}")
+    except Exception as e:
+        print(f"失败通知没发出去（不影响退出码）: {e}")
+
+
 def run_daily(force: bool = False, preset_name: str = "") -> int:
     """定时任务入口：按星期轮换选题 → 出稿 → 建草稿（不群发）。
 
@@ -396,6 +412,7 @@ def run_daily(force: bool = False, preset_name: str = "") -> int:
         )
     except Exception as e:
         print(f"出稿失败，本次不建草稿: {e}")
+        _notify_failure(f"出稿失败（{preset['name']}）: {e}")
         return 1
 
     from src.utils import html_to_text
@@ -404,6 +421,7 @@ def run_daily(force: bool = False, preset_name: str = "") -> int:
     print(f"标题: {title} | AI 味 {report['total_score']} {'通过' if passed else '不通过'}")
     if not passed:
         print("门禁不通过，不建草稿（预览已落盘，改完手动重跑）")
+        _notify_failure(f"AI 味门禁拦截（{preset['name']}）: {report['total_score']}")
         return 1
 
     # 封面：复用 build_workbuddy_cover 的 steps 版式，文案跟当天选题走
