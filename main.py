@@ -103,6 +103,9 @@ def main():
         action="store_true",
         help="只在本地生成 HTML 预览，不创建草稿（发布前审阅）",
     )
+    subparsers.add_parser(
+        "workbuddy", help="按星期轮换出一篇 WorkBuddy 实操草稿（每日 16:00 定时用）"
+    )
     subparsers.add_parser("dashboard", help="启动增强版 Web 界面")
     subparsers.add_parser("dashboard-simple", help="启动简洁版 Web 界面")
     subparsers.add_parser("api", help="启动 REST API")
@@ -168,6 +171,12 @@ def main():
         run_scheduler()
     elif args.command == "daily":
         run_daily(dry_run=getattr(args, "dry_run", False))
+    elif args.command == "workbuddy":
+        # 单独一个定时任务，选题/去重/封面都在脚本里，main.py 只做转发
+        sys.path.insert(0, str(Path(__file__).resolve().parent / "scripts"))
+        from gen_workbuddy_article import run_daily as run_workbuddy_daily
+
+        sys.exit(run_workbuddy_daily())
     elif args.command == "dashboard":
         run_enhanced_dashboard()
     elif args.command == "dashboard-simple":

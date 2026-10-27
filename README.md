@@ -84,15 +84,19 @@ python main.py daily
 
 ### 4. 定时任务（Windows 任务计划）
 
-生产环境用 Windows 任务计划拉起 `python main.py daily`，**每 2 天 08:00 跑一次，只创建草稿不群发**（`create_draft`；`publish_draft` 群发必须人工授权）。
+生产环境用 Windows 任务计划拉起 `python main.py daily`，**每 1 天 08:00 跑一次，只创建草稿不群发**（`create_draft`；`publish_draft` 群发必须人工授权）。
 
 ```powershell
-# 注册/更新任务（幂等，可重复执行）
+# 注册/更新任务（幂等，可重复执行；一次注册两个任务）
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts\win\register-task.ps1
 ```
 
-- 任务名：`FeiqingqiWechatAINews-Draft`
-- 入口：`scripts\win\run-daily.cmd`（由 `run-hidden.vbs` 隐藏窗口调用）
+| 任务名 | 时间 | 入口 | 内容 |
+|---|---|---|---|
+| `FeiyingqiWechatAINews-Draft` | `config.yaml` 的 08:00 | `main.py daily` | 当日 AI 新闻稿 |
+| `FeiyingqiWechatAINews-WorkBuddy` | 16:00 每天 | `main.py workbuddy` | WorkBuddy 实操稿，选题按星期轮换（7 套），当天已有 WorkBuddy 稿则跳过 |
+
+- 入口脚本：`scripts\win\run-daily.cmd`（由 `run-hidden.vbs` 隐藏窗口调用，子命令作为参数传入）
 - 日志：`logs\daily-publish.log`（超过 1MB 自动轮转）
 - 退出码：`0` 成功 / `1` 流水线失败 / `127` 环境错误（找不到 python 或 main.py）
 - 提醒：微信 API 有 IP 白名单，换网络后需先在公众号后台加白名单，否则草稿创建会失败

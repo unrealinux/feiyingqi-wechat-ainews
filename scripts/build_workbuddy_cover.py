@@ -27,6 +27,7 @@ KICKER = "WorkBuddy · 社区蓝皮书 · 10 章实操 · 2026"
 TITLE_LINES = ["WorkBuddy 自动化", "把重复劳动", "变成 Agent 资产"]
 SUBTITLE = "从 MCP 到 Skill，AI 接管日常琐碎"
 FOOTER = "这篇讲的是一次性任务怎么变成可复用资产"
+STEPS_LABEL = "安装 → 第一个任务 → Skill → 自动化"
 INK = (16, 16, 16)
 TILE = (255, 255, 255)
 
@@ -109,12 +110,14 @@ def build(
     subtitle=None,
     footer=None,
     variant="flow",
+    steps_label=None,
 ):
     img = Image.new("RGB", (W, H), BG)
     d = ImageDraw.Draw(img)
 
     title_lines = title_lines or TITLE_LINES
     kicker = kicker or KICKER
+    steps_label = steps_label or STEPS_LABEL
     subtitle = subtitle or SUBTITLE
     footer = footer or FOOTER
 
@@ -153,7 +156,7 @@ def build(
             d.text((x + size - 30, cy + size - 26), f"0{i + 1}", font=font(20), fill=BG)
         d.text(
             (start_x, cy + size + 26),
-            "安装 → 第一个任务 → Skill → 自动化",
+            steps_label,
             font=font(26, bold=False),
             fill=INK,
         )
@@ -198,6 +201,7 @@ if __name__ == "__main__":
     parser.add_argument("--kicker", default="")
     parser.add_argument("--subtitle", default="")
     parser.add_argument("--footer", default="")
+    parser.add_argument("--steps-label", default="", help="steps 版式卡片下方那行小字")
     args = parser.parse_args()
     build(
         args.out,
@@ -206,4 +210,5 @@ if __name__ == "__main__":
         subtitle=args.subtitle or None,
         footer=args.footer or None,
         variant=args.variant,
+        steps_label=args.steps_label or None,
     )

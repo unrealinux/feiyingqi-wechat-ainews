@@ -79,3 +79,28 @@ $info = Get-ScheduledTaskInfo -TaskName $taskName
 Write-Output "registered: $taskName"
 Write-Output ("state     : {0}" -f (Get-ScheduledTask -TaskName $taskName).State)
 Write-Output ("next run  : {0}" -f $info.NextRunTime)
+
+# ---------------------------------------------------------------------------
+# Second task: one WorkBuddy how-to draft every day at 16:00.
+#
+# Same worker script, different argument (main.py workbuddy). The topic rotates
+# by weekday inside scripts/gen_workbuddy_article.py (7 presets, one per day),
+# and it skips if a WorkBuddy draft already exists today.
+#
+# NOTE: this is an operator decision to run two drafts per day (08:00 news +
+# 16:00 WorkBuddy). AGENTS.md says one per day, so if the account gets flagged,
+# disable this task first:  Unregister-ScheduledTask -TaskName FeiyingqiWechatAINews-WorkBuddy
+# ---------------------------------------------------------------------------
+$wbTaskName = 'FeiyingqiWechatAINews-WorkBuddy'
+$wbTime = '16:00'
+
+$wbAction = New-ScheduledTaskAction -Execute 'wscript.exe' -Argument ('"{0}" "{1}" workbuddy' -f $vbs, $cmd)
+$wbTrigger = New-ScheduledTaskTrigger -Daily -At $wbTime
+$wbDescription = ('Every day at {0}: generate one WorkBuddy how-to article (topic rotates by weekday) and save it as a WeChat DRAFT. Entry point: python main.py workbuddy' -f $wbTime)
+
+Register-ScheduledTask -TaskName $wbTaskName -Action $wbAction -Trigger $wbTrigger -Settings $settings -Principal $principal -Description $wbDescription -Force | Out-Null
+
+$wbInfo = Get-ScheduledTaskInfo -TaskName $wbTaskName
+Write-Output "registered: $wbTaskName"
+Write-Output ("state     : {0}" -f (Get-ScheduledTask -TaskName $wbTaskName).State)
+Write-Output ("next run  : {0}" -f $wbInfo.NextRunTime)
