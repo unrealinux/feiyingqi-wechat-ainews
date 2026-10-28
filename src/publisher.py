@@ -999,6 +999,25 @@ def _title_not_in_body(title: str, plain_text: str) -> bool:
     return bool(title) and norm(title) not in norm(plain_text)
 
 
+def _normalize_cover_for_wechat(cover_path: str) -> str:
+    """把封面重编成微信封面推荐的 900×383；失败返回空串（不掩盖原错误）。"""
+    try:
+        from pathlib import Path as _Path
+
+        from PIL import Image
+
+        path = _Path(cover_path)
+        out = path.with_name(f"{path.stem}_900x383.jpg")
+        with Image.open(path) as img:
+            img.convert("RGB").resize((900, 383), Image.Resampling.LANCZOS).save(
+                out, "JPEG", quality=88, optimize=True
+            )
+        return str(out)
+    except Exception as e:
+        logger.warning(f"封面重编码失败，放弃这次兜底: {e}")
+        return ""
+
+
 def publish_article(
     title: str,
     content: str,
@@ -1058,6 +1077,21 @@ def publish_article(
         digest=digest,
         cover_path=cover_path,
     )
+
+    if not media_id and cover_path:
+        # 封面被微信判“尺寸不合法/裁剪失败”时，正文其实没问题：
+        # 2026-10-28 10:30 定时任务就死在这一步，1440×810 的原图换成 900×383 就过了。
+        # 只在这条失败路径上重试，正常发布的封面不动。
+        safe_cover = _normalize_cover_for_wechat(cover_path)
+        if safe_cover:
+            logger.warning(f"改用 {safe_cover} 重试建草稿（封面被微信拒绝）")
+            media_id = publisher.create_draft(
+                title=title,
+                content=html_content,
+                author=author,
+                digest=digest,
+                cover_path=safe_cover,
+            )
 
     if not media_id:
         logger.error("Failed to create draft")

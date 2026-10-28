@@ -173,3 +173,28 @@ class TestStepsBlock:
 
         assert dropped == []
         assert "三步走完" in et.render(spec)
+
+
+def test_bullet_items_written_as_dicts_are_flattened():
+    """模型偶尔把 bullet 条目写成 {"text": ...}，不能把 dict 直接印进正文。"""
+    import sys
+    from pathlib import Path
+
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+    from src.editorial_template import render
+
+    spec = {
+        "meta_line": "2026年1月1日 ｜ 测试", "title": "T", "subtitle": "S",
+        "lead": ["第一段。"],
+        "sections": [
+            {"heading": "一", "accent": "red",
+             "blocks": [{"type": "bullets", "items": [{"text": "字典条目"}, "字符串条目"]}]},
+            {"heading": "二", "accent": "green", "blocks": [{"type": "p", "text": "x"}]},
+            {"heading": "三", "accent": "red", "blocks": [{"type": "p", "text": "y"}]},
+        ],
+        "closing": ["收束一。", "收束二。"], "sources": ["1. a", "2. b"],
+    }
+    html = render(spec)
+    assert "· 字典条目" in html
+    assert "· 字符串条目" in html
+    assert "{'text'" not in html

@@ -126,3 +126,26 @@ def test_fail_closed_when_both_drafts_are_sloppy(summarizer):
         summarizer.generate_editorial_spec(_news(), allow_mock=False)
 
     assert len(summarizer.client.prompts) == 2, "重试次数封顶 2 次，不能无限重写"
+
+
+class TimeoutClient:
+    """每次都超时的假 LLM（模拟 2026-10-27/28 定时任务踩到的 agnes 超时）。"""
+
+    def __init__(self):
+        self.calls = 0
+        self.chat = self
+        self.completions = self
+
+    def create(self, **kwargs):
+        self.calls += 1
+        raise TimeoutError("Request timed out.")
+
+
+def test_transport_error_gets_an_extra_attempt(summarizer):
+    """超时/断连不是素材的错：多给一次机会，别让当天直接没稿。"""
+    summarizer.client = TimeoutClient()
+
+    with pytest.raises(LLMUnavailableError):
+        summarizer.generate_editorial_spec(_news(), allow_mock=False)
+
+    assert summarizer.client.calls == 3, "传输层失败要试满 3 次，内容失败仍然是 2 次"

@@ -45,7 +45,14 @@ if (Test-Path $cfgPath) {
     Write-Output "config   : not found, using defaults time=$schedTime interval_days=$schedDays"
 }
 
-$trigger = New-ScheduledTaskTrigger -Daily -At $schedTime -DaysInterval $schedDays
+# Several times a day, not once: the pipeline is idempotent (it skips when today
+# already has a draft), so extra triggers are free retries after a failed run.
+# 2026-10-27/28: the LLM timed out at 08:00 and that day had no article at all;
+# 16:00 the day before failed with a connection error. One shot per day is too few.
+$retryTimes = @('10:30', '13:00')
+$trigger = @(
+    (New-ScheduledTaskTrigger -Daily -At $schedTime -DaysInterval $schedDays)
+) + ($retryTimes | ForEach-Object { New-ScheduledTaskTrigger -Daily -At $_ -DaysInterval $schedDays })
 
 # StartWhenAvailable: catch up once after a missed window (machine was off)
 $settingsParams = @{
@@ -62,7 +69,7 @@ $settings = New-ScheduledTaskSettingsSet @settingsParams
 # Interactive = "run only when the user is logged on", so no password is stored
 $principal = New-ScheduledTaskPrincipal -UserId "$env:USERDOMAIN\$env:USERNAME" -LogonType Interactive -RunLevel Limited
 
-$description = ('Every {0} day(s) at {1} (from config.yaml): generate one AI news article and save it as a WeChat DRAFT (create_draft only, never mass send). Entry point: python main.py daily' -f $schedDays, $schedTime)
+$description = ('Every {0} day(s) at {1} plus retries at {2} (from config.yaml): generate one AI news article and save it as a WeChat DRAFT (create_draft only, never mass send). Skips if today already has a draft. Entry point: python main.py daily' -f $schedDays, $schedTime, ($retryTimes -join ', '))
 
 $registerParams = @{
     TaskName    = $taskName
@@ -95,7 +102,9 @@ $wbTaskName = 'FeiyingqiWechatAINews-WorkBuddy'
 $wbTime = '16:00'
 
 $wbAction = New-ScheduledTaskAction -Execute 'wscript.exe' -Argument ('"{0}" "{1}" workbuddy' -f $vbs, $cmd)
-$wbTrigger = New-ScheduledTaskTrigger -Daily -At $wbTime
+$wbTrigger = @(
+    (New-ScheduledTaskTrigger -Daily -At $wbTime)
+) + (@('18:30') | ForEach-Object { New-ScheduledTaskTrigger -Daily -At $_ })
 $wbDescription = ('Every day at {0}: generate one WorkBuddy how-to article (topic rotates by weekday) and save it as a WeChat DRAFT. Entry point: python main.py workbuddy' -f $wbTime)
 
 Register-ScheduledTask -TaskName $wbTaskName -Action $wbAction -Trigger $wbTrigger -Settings $settings -Principal $principal -Description $wbDescription -Force | Out-Null

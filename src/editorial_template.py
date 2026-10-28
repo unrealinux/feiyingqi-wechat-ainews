@@ -82,6 +82,13 @@ class EditorialSpecError(ValueError):
     """结构化内容不合法（缺字段 / 无来源 / 章节过少）。"""
 
 
+def _item_text(item: Any) -> str:
+    """bullet 的条目偶尔被模型写成 {"text": ...}：取出文字，别把 dict 印到正文里。"""
+    if isinstance(item, dict):
+        return str(item.get("text") or item.get("title") or "")
+    return str(item or "")
+
+
 def _inline(text: str) -> str:
     """转义 HTML，然后把 **加粗** 还原成 <strong>（唯一允许的行内标记）。"""
     escaped = html.escape(str(text or ""), quote=False)
@@ -228,7 +235,7 @@ def _render_blocks(blocks: List[Dict[str, Any]]) -> str:
                 tail = 24 if (last and j == len(items) - 1) else 8
                 out.append(
                     f'<p style="text-indent:2em; margin:0 0 {tail}px;">'
-                    f"· {_inline(item)}</p>"
+                    f"· {_inline(_item_text(item))}</p>"
                 )
         elif kind == "datacard":
             out.append(_datacard(block))
@@ -483,10 +490,17 @@ def extract_json(raw: str) -> Dict[str, Any]:
             raise EditorialSpecError("模型输出里找不到 JSON 对象")
         text = text[start : end + 1]
     try:
-        spec = json.loads(text)
+        return json.loads(text, strict=False)  # strict=False：容忍字符串里的裸换行
     except json.JSONDecodeError as e:
-        raise EditorialSpecError(f"JSON 解析失败: {e}") from e
-    return spec
+        first_error = e
+    # 模型第二个常见毛病：最后一格多一个逗号。修一下再试，比整篇重写便宜。
+    repaired = re.sub(r",(\s*[}\]])", lambda m: m.group(1), text)
+    if repaired != text:
+        try:
+            return json.loads(repaired, strict=False)
+        except json.JSONDecodeError:
+            pass
+    raise EditorialSpecError(f"JSON 解析失败: {first_error}") from first_error
 
 
 if __name__ == "__main__":

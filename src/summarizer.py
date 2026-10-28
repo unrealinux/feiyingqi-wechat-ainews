@@ -83,6 +83,32 @@ _LLM_PROVIDERS = {
 # llm.provider = auto 时的探测顺序（先挑当前最可用的）
 _AUTO_ORDER = ["agnes", "deepseek", "zhipu", "siliconflow", "openrouter", "openai"]
 
+# 单次生成调用的超时与尝试次数。agnes 实测很慢（5 个 token 要 24s），
+# 180s 跑 2500~3500 字的完整 JSON 经常不够：2026-10-27/28 两次定时任务都是
+# 超时失败、当天没稿。宁可等到 300s，也不要因为慢就丢掉一篇。
+LLM_CALL_TIMEOUT = 300
+# 内容问题（AI 味/JSON 不合规）只重写 2 次，第 3 次交给调度层换素材；
+# 传输问题（超时/断连）不是素材的错，多给一次机会。
+LLM_CONTENT_ATTEMPTS = 2
+LLM_TRANSPORT_ATTEMPTS = 3
+
+
+def _is_transport_error(err: Exception) -> bool:
+    """超时/断连一类错误：换素材没用，重试同一次调用才有用。"""
+    if type(err).__name__ in {
+        "APITimeoutError",
+        "APIConnectionError",
+        "ConnectError",
+        "ReadTimeout",
+        "RemoteProtocolError",
+        "TimeoutError",
+        "ConnectionError",
+        "ConnectionResetError",
+    }:
+        return True
+    text = str(err).lower()
+    return "timed out" in text or "connection error" in text or "connection reset" in text
+
 
 def _resolve_provider(config: dict, name: str) -> Optional[dict]:
     """按提供商名解析出 api_key / base_url / model（密钥优先取环境变量/.env）。"""
@@ -342,7 +368,10 @@ JSON 结构如下：
         last_error = None
         last_failure_was_ai_tone = False
         ai_feedback = ""
-        for attempt in (1, 2):
+        max_attempts = LLM_CONTENT_ATTEMPTS
+        attempt = 0
+        while attempt < max_attempts:
+            attempt += 1
             last_failure_was_ai_tone = False
             try:
                 response = self.client.chat.completions.create(
@@ -358,7 +387,7 @@ JSON 结构如下：
                     # —— 否则同一个模型只会把同款套话再写一遍。
                     temperature=0.85 if attempt == 1 else (1.0 if ai_feedback else 0.5),
                     max_tokens=6000,
-                    timeout=180,
+                    timeout=LLM_CALL_TIMEOUT,
                 )
                 raw = response.choices[0].message.content or ""
                 spec = extract_json(raw)
@@ -424,6 +453,17 @@ JSON 结构如下：
             except Exception as e:
                 last_error = e
                 logger.warning(f"结构化内容第 {attempt} 次生成失败: {e}")
+                # JSON 不合法要告诉模型错在哪，否则它只会照着原样再错一遍
+                # （2026-10-28 16:00 定时任务连续两次都死在 JSON 解析）。
+                if "JSON 解析失败" in str(e):
+                    ai_feedback = (
+                        "\n\n上一稿不是合法 JSON（" + str(e) + "）。"
+                        "只输出一个 JSON 对象本身：不要 Markdown 围栏、不要在前后加解释、"
+                        "字符串里不要有裸换行、不要有尾随逗号、中文引号不要当定界符。"
+                    )
+                if _is_transport_error(e) and max_attempts < LLM_TRANSPORT_ATTEMPTS:
+                    max_attempts += 1
+                    logger.info(f"传输层失败，再试一次（最多 {LLM_TRANSPORT_ATTEMPTS} 次）")
 
         if last_failure_was_ai_tone:
             raise ThinMaterialError(
