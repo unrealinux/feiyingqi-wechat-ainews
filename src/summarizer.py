@@ -6,6 +6,7 @@ AI News Summarizer - AI 摘要生成模块
 
 import os
 import re
+import time
 import logging
 from datetime import datetime
 from typing import List, Optional
@@ -96,6 +97,7 @@ LLM_TRANSPORT_ATTEMPTS = 3
 def _is_transport_error(err: Exception) -> bool:
     """超时/断连一类错误：换素材没用，重试同一次调用才有用。"""
     if type(err).__name__ in {
+        "RateLimitError",
         "APITimeoutError",
         "APIConnectionError",
         "ConnectError",
@@ -107,6 +109,8 @@ def _is_transport_error(err: Exception) -> bool:
     }:
         return True
     text = str(err).lower()
+    if "rate limit" in text or "429" in text or "max connections" in text:
+        return True
     return "timed out" in text or "connection error" in text or "connection reset" in text
 
 
@@ -464,6 +468,8 @@ JSON 结构如下：
                 if _is_transport_error(e) and max_attempts < LLM_TRANSPORT_ATTEMPTS:
                     max_attempts += 1
                     logger.info(f"传输层失败，再试一次（最多 {LLM_TRANSPORT_ATTEMPTS} 次）")
+                    if "rate limit" in str(e).lower() or "429" in str(e):
+                        time.sleep(30)  # 限流：立刻重试只会再被拒
 
         if last_failure_was_ai_tone:
             raise ThinMaterialError(

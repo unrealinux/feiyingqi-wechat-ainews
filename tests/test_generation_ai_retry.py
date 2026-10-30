@@ -149,3 +149,27 @@ def test_transport_error_gets_an_extra_attempt(summarizer):
         summarizer.generate_editorial_spec(_news(), allow_mock=False)
 
     assert summarizer.client.calls == 3, "传输层失败要试满 3 次，内容失败仍然是 2 次"
+
+
+class RateLimitClient:
+    """模拟 agnes 的 429（max connections reached）。"""
+
+    def __init__(self):
+        self.calls = 0
+        self.chat = self
+        self.completions = self
+
+    def create(self, **kwargs):
+        self.calls += 1
+        raise RuntimeError("Error code: 429 - RateLimitError: max connections reached: 666")
+
+
+def test_rate_limit_is_retried_like_a_transport_error(summarizer, monkeypatch):
+    """429 是限流，不是素材问题：要重试，而且先在本地等一下。"""
+    monkeypatch.setattr("src.summarizer.time.sleep", lambda _s: None)
+    summarizer.client = RateLimitClient()
+
+    with pytest.raises(LLMUnavailableError):
+        summarizer.generate_editorial_spec(_news(), allow_mock=False)
+
+    assert summarizer.client.calls == 3
