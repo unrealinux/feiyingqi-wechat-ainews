@@ -220,8 +220,10 @@ def run_once() -> bool:
         except Exception as e:
             logger.warning(f"写实封面生成异常，改用渐变封面: {e}")
         if not cover_result:
-            logger.info("改用本地渐变封面（无文字版）")
-            cover_result = generate_gradient_cover(title, cover_path, with_text=False)
+            # 降级封面必须带标题：2026-11-05 Agnes 超时，降级出的纯渐变图在列表里
+            # 既没标题也没信息量，等于没封面。
+            logger.info("改用本地渐变封面（带标题）")
+            cover_result = generate_gradient_cover(title, cover_path, with_text=True)
         if not cover_result:
             logger.warning("渐变封面生成失败，将使用默认封面")
             cover_path = ""
