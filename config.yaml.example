@@ -60,16 +60,12 @@ news:
     hackernews: false
     websites: false
   
-  # 国内专用新闻源
+  # 国内专用新闻源（只列实测抓得到的站点）
   domestic_sources:
     enabled: true
-    bing_china: true
-    baidu: true
-    weibo: true
-    zhihu: true
+    baidu: true      # 百度热搜
     36kr: true
-    liangzi: true
-    jiqizhixin: true
+    liangzi: true    # 量子位
     huxiu: true
 
 publish:

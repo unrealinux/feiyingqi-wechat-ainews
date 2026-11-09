@@ -1,46 +1,43 @@
 """
 Domestic News Sources - 国内新闻源
 
-优化国内访问：百度、微博、知乎、36kr、量子位、机器之心等
+优化国内访问：36kr、量子位、虎嗅、百度热搜（选择器均为线上实测可用）
 """
 
-import re
 import logging
 from typing import List, Optional
 from datetime import datetime
+from urllib.parse import urlparse
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
+# 每个站点只描述「标题链接」选哪一个（link_selector），抓取逻辑统一。
+# 选择器必须对着线上页面实测过；抓不到就别留在这里，否则日志里天天是 0 条。
+# 已移除的源（都无法直接 requests 抓）：
+#   知乎  接口 401（要登录 cookie）、微博 接口 403、机器之心 列表前端渲染无静态 HTML
 DOMESTIC_SITES = {
-    # 中文科技媒体
     "36kr": {
         "url": "https://www.36kr.com/information/AI/",
-        "selector": "article",
+        "link_selector": "a.article-item-title",
         "name": "36kr",
     },
     "量子位": {
         "url": "https://www.qbitai.com/",
-        "selector": "article",
+        "link_selector": 'a[href^="https://www.qbitai.com/20"]',
         "name": "量子位",
     },
-    "机器之心": {
-        "url": "https://www.jiqizhixin.com/",
-        "selector": "article",
-        "name": "机器之心",
+    "虎嗅": {
+        "url": "https://www.huxiu.com/",
+        "link_selector": "a.article-title",
+        "name": "虎嗅",
     },
-    "虎嗅": {"url": "https://www.huxiu.com/", "selector": "article", "name": "虎嗅"},
-    "知乎": {
-        "url": "https://www.zhihu.com/topic/19550517/hot",
-        "selector": ".List-item",
-        "name": "知乎",
-    },
-    "微博": {"url": "https://weibo.com/hot/search", "selector": "tr", "name": "微博"},
     "百度": {
         "url": "https://top.baidu.com/board?tab=realtime",
-        "selector": ".item-wrap",
+        # 百度用 css-modules 哈希类名（title_dIF3B），前缀匹配比整串稳定
+        "link_selector": 'a[class^="title_"]',
         "name": "百度热搜",
     },
 }
@@ -77,39 +74,22 @@ def fetch_domestic_news(
                 return []
 
             soup = BeautifulSoup(response.text, "html.parser")
-            articles = soup.select(site_config["selector"])[:5]
+            parsed = urlparse(site_config["url"])
 
             items = []
-            for article in articles:
-                title = ""
-                link = ""
+            for elem in soup.select(site_config["link_selector"])[:5]:
+                title = elem.get_text(strip=True)
+                href = elem.get("href") or ""
 
-                # 尝试多种选择器
-                title_elem = (
-                    article.find("a")
-                    or article.find("h2")
-                    or article.find("h3")
-                    or article.find(class_=re.compile("title", re.I))
-                )
-
-                if title_elem:
-                    title = title_elem.get_text(strip=True)
-                    href = title_elem.get("href", "")
-                    if href:
-                        if href.startswith("/"):
-                            from urllib.parse import urlparse
-
-                            parsed = urlparse(site_config["url"])
-                            link = f"{parsed.scheme}://{parsed.netloc}{href}"
-                        elif href.startswith("http"):
-                            link = href
+                if href.startswith("/"):
+                    href = f"{parsed.scheme}://{parsed.netloc}{href}"
 
                 # 过滤无效标题
                 if title and len(title) > 10 and "广告" not in title:
                     items.append(
                         NewsItem(
                             title=title,
-                            url=link or site_config["url"],
+                            url=href if href.startswith("http") else site_config["url"],
                             source=site_name,
                             description=f"来源：{site_name}",
                             published_at=datetime.now().strftime("%Y-%m-%d"),
@@ -188,103 +168,12 @@ def search_baidu(keyword: str, max_results: int = 10) -> List:
         return []
 
 
-def get_zhihu_hot() -> List:
-    """知乎热榜"""
-    from src.fetcher import NewsItem
-
-    try:
-        import requests
-
-        url = "https://www.zhihu.com/api/v3/feed/topstory/hot-lists/total?limit=50"
-        headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-            "Referer": "https://www.zhihu.com/",
-        }
-
-        response = requests.get(url, headers=headers, timeout=10)
-
-        if response.status_code == 200:
-            data = response.json()
-            items = []
-
-            for item in data.get("data", [])[:10]:
-                title = item.get("target", {}).get("title", "")
-                url = f"https://www.zhihu.com/question/{item.get('target', {}).get('id', '')}"
-
-                if title:
-                    items.append(
-                        NewsItem(
-                            title=title,
-                            url=url,
-                            source="知乎",
-                            description=f"热度: {item.get('detail_text', '')}",
-                            published_at=datetime.now().strftime("%Y-%m-%d"),
-                        )
-                    )
-
-            return items
-
-    except Exception as e:
-        logger.warning(f"Zhihu hot failed: {e}")
-
-    return []
-
-
-def get_weibo_hot() -> List:
-    """微博热搜"""
-    from src.fetcher import NewsItem
-
-    try:
-        import requests
-
-        url = "https://weibo.com/ajax/side/hotSearch"
-        headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
-        }
-
-        response = requests.get(url, headers=headers, timeout=10)
-
-        if response.status_code == 200:
-            data = response.json()
-            items = []
-
-            for item in data.get("data", {}).get("realtime", [])[:15]:
-                word = item.get("word", "")
-
-                if (
-                    word
-                    and "AI" in word
-                    or "人工智能" in word
-                    or "大模型" in word
-                    or "GPT" in word
-                ):
-                    items.append(
-                        NewsItem(
-                            title=word,
-                            url=f"https://s.weibo.com/weibo?q={word}",
-                            source="微博",
-                            description=f"热度: {item.get('num', '')}",
-                            published_at=datetime.now().strftime("%Y-%m-%d"),
-                        )
-                    )
-
-            return items
-
-    except Exception as e:
-        logger.warning(f"Weibo hot failed: {e}")
-
-    return []
-
-
 # config.yaml news.domestic_sources 的键 → DOMESTIC_SITES 的键
-# （bing_china 暂无对应站点抓取实现，先不映射）
+# （只保留实测抓得到的站点；知乎/微博/机器之心见 DOMESTIC_SITES 上方说明）
 CONFIG_KEY_TO_SITE = {
     "36kr": "36kr",
     "liangzi": "量子位",
-    "jiqizhixin": "机器之心",
     "huxiu": "虎嗅",
-    "zhihu": "知乎",
-    "weibo": "微博",
     "baidu": "百度",
 }
 
@@ -309,24 +198,8 @@ def fetch_all_domestic(domestic_cfg: Optional[dict] = None) -> List:
     logger.info("Fetching domestic news sources...")
     logger.info("=" * 50)
 
-    # 知乎
-    if "知乎" in enabled_sites:
-        logger.info("Fetching Zhihu hot...")
-        zhihu_news = get_zhihu_hot()
-        all_news.extend(zhihu_news)
-
-    # 微博
-    if "微博" in enabled_sites:
-        logger.info("Fetching Weibo hot...")
-        weibo_news = get_weibo_hot()
-        all_news.extend(weibo_news)
-
-    # 网站采集（知乎/微博已由专用接口覆盖，站点抓取里跳过，避免重复）
-    site_only = [s for s in enabled_sites if s not in ("知乎", "微博")]
-    if site_only:
-        logger.info("Fetching domestic sites...")
-        site_news = fetch_domestic_news(sites=site_only)
-        all_news.extend(site_news)
+    if enabled_sites:
+        all_news.extend(fetch_domestic_news(sites=enabled_sites))
 
     logger.info("=" * 50)
     logger.info(f"Domestic news total: {len(all_news)}")

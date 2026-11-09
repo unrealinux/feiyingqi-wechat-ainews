@@ -122,7 +122,9 @@ def _resolve_provider(config: dict, name: str) -> Optional[dict]:
     section, default_base, default_model, env_name, model_key = spec
     cfg = config.get(section, {}) or {}
     api_key = cfg.get("api_key") or os.environ.get(env_name, "")
-    if api_key == "your_openai_api_key_here":
+    # 配置样例里的占位符（your_deepseek_api_key_here 等）不是真 key：
+    # 不过滤就会拿它去打接口，报 401 把人引到“key 过期”的错误方向。
+    if re.fullmatch(r"your_[a-z0-9_]*here", str(api_key)):
         api_key = ""
     return {
         "provider": name,

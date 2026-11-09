@@ -51,9 +51,10 @@ news:
   # 🇨🇳 启用国内新闻源
   domestic_sources:
     enabled: true
-    zhihu: true    # 知乎热榜
-    weibo: true    # 微博热搜
-    sites: true    # 科技媒体
+    baidu: true     # 百度热搜
+    36kr: true      # 36kr AI 频道
+    liangzi: true   # 量子位
+    huxiu: true     # 虎嗅
 
 # 四、发布配置
 # -------------------------------------------

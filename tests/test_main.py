@@ -236,6 +236,34 @@ class TestScheduler(unittest.TestCase):
 
         with patch("src.fetcher.fetch_news", side_effect=RuntimeError("断网")):
             self.assertEqual(_refetch_more(original)[0].url, "https://a.com")
+    def test_run_once_fails_closed_when_no_news(self):
+        """抓不到新闻时不得拿 mock 的虚构新闻凑稿（AGENTS.md 禁编造事实）。"""
+        from unittest.mock import patch
+        from src.scheduler import run_once
+
+        with patch("src.publisher.count_drafts_created_today", return_value=0), \
+             patch("src.fetcher.fetch_news", return_value=[]) as m_fetch, \
+             patch("src.fetcher.get_mock_news") as m_mock, \
+             patch("src.summarizer.Summarizer.generate_editorial_spec") as m_llm, \
+             patch("src.publisher.publish_article") as m_publish: \
+            result = run_once()
+
+        self.assertTrue(m_fetch.called)
+        self.assertFalse(result)
+        self.assertFalse(m_mock.called, "不得回退到虚构新闻")
+        self.assertFalse(m_llm.called, "没素材就别花 LLM")
+        self.assertFalse(m_publish.called)
+
+    def test_placeholder_api_key_is_not_configured(self):
+        """config.yaml.example 里的 your_xxx_here 占位符不算配了 key。"""
+        from src.summarizer import _resolve_provider
+
+        for provider in ("openai", "deepseek", "zhipu", "siliconflow"):
+            resolved = _resolve_provider(
+                {provider: {"api_key": f"your_{provider}_api_key_here"}}, provider
+            )
+            self.assertEqual(resolved["api_key"], "", provider)
+
     def test_run_once_skips_when_today_quota_is_used(self):
         """当天已有草稿时，定时任务必须自动让路（AGENTS.md 每天 ≤1 篇）。"""
         from unittest.mock import patch

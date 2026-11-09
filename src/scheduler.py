@@ -156,7 +156,7 @@ def start_scheduler(task_func: Callable):
 
 def run_once() -> bool:
     """运行一次完整流程：抓新闻 → LLM 产出结构化内容 → 固定排版渲染 → 写草稿。"""
-    from src.fetcher import fetch_news, get_mock_news
+    from src.fetcher import fetch_news
     from src.summarizer import Summarizer, ThinMaterialError
     from src.publisher import publish_article
     from src import editorial_template
@@ -183,8 +183,9 @@ def run_once() -> bool:
         news_items = fetch_news()
 
         if not news_items:
-            logger.warning("No news fetched, using mock data")
-            news_items = get_mock_news(5)
+            # 不用 get_mock_news 兜底：里面是“GPT-5 发布”这类虚构新闻，
+            # 照它写出来就是编造事实（AGENTS.md 红线）。宁可今天没稿。
+            raise RuntimeError("没抓到任何新闻素材（所有新闻源都空），本次不生成")
 
         logger.info(f"Fetched {len(news_items)} news items")
 

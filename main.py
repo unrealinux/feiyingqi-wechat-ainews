@@ -38,7 +38,6 @@ def main():
   python main.py run                  手动运行一次（默认模式）
   python main.py run --cover          带封面图运行
   python main.py run --ai-cover       带AI生成封面运行
-  python main.py run --publish        自动发布到微信
   python main.py run --no-llm         跳过LLM生成（仅获取新闻）
 
   # 单独功能
@@ -76,7 +75,6 @@ def main():
     run_parser = subparsers.add_parser("run", help="手动运行一次")
     run_parser.add_argument("--cover", action="store_true", help="生成封面图")
     run_parser.add_argument("--ai-cover", action="store_true", help="使用AI生成封面图")
-    run_parser.add_argument("--publish", action="store_true", help="自动发布到微信")
     run_parser.add_argument("--no-llm", action="store_true", help="跳过LLM生成")
     run_parser.add_argument("--mock", action="store_true", help="使用模拟数据")
 
@@ -280,8 +278,10 @@ def run_once(args=None):
         else:
             news_items = fetch_news()
             if not news_items:
-                print("   ⚠️ 未获取到新闻，使用模拟数据")
-                news_items = get_mock_news(5)
+                # 不用 get_mock_news 兜底：那是虚构新闻（GPT-5/Llama 4），
+                # 照它写出来就是编造事实（AGENTS.md §1.3）。真要模拟请显式 --mock。
+                print("   ❌ 未获取到新闻，终止（不用模拟新闻凑稿）")
+                return
             print(f"   获取到 {len(news_items)} 条新闻")
 
         # 2. 生成文章
@@ -361,19 +361,19 @@ def generate_only():
     """仅生成文章"""
     from src.fetcher import fetch_news
     from src.summarizer import generate_article
-    from src.fetcher import get_mock_news
 
     print("\n📰 获取新闻...")
     news_items = fetch_news()
 
     if not news_items:
-        print("使用模拟数据")
-        news_items = get_mock_news(5)
+        # 这份 md 会被 `publish` 命令拣去建草稿，所以同样不能拿假新闻充数
+        print("❌ 未获取到新闻，终止（不用模拟新闻凑稿）")
+        return
 
     print(f"   获取到 {len(news_items)} 条")
 
     print("\n📝 生成文章...")
-    article = generate_article(news_items)
+    article = generate_article(news_items, allow_mock=False)
 
     today = datetime.now().strftime("%Y%m%d")
     output_path = f"output/article_{today}.md"
