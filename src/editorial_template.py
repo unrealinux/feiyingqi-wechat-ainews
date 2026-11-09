@@ -89,9 +89,19 @@ def _item_text(item: Any) -> str:
     return str(item or "")
 
 
-def _inline(text: str) -> str:
-    """转义 HTML，然后把 **加粗** 还原成 <strong>（唯一允许的行内标记）。"""
-    escaped = html.escape(str(text or ""), quote=False)
+_MD_LINK = re.compile(r"\[([^\]]+)\]\(([^)\s]+)\)")
+
+
+def _inline(text: str, keep_links: bool = False) -> str:
+    """转义 HTML，然后把 **加粗** 还原成 <strong>（唯一允许的行内标记）。
+
+    微信公众号正文不支持站外链接，模型万一把链接写进正文块，`[标题](url)`
+    渲染出来就是字面的方括号 + 长 URL。所以正文里降级成纯标题；
+    sources 例外（keep_links=True），那里要保留 URL 方便溯源。
+    """
+    raw = str(text or "")
+    raw = _MD_LINK.sub(r"\1 \2" if keep_links else r"\1", raw)
+    escaped = html.escape(raw, quote=False)
     return re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", escaped)
 
 
@@ -345,7 +355,7 @@ def render(spec: Dict[str, Any]) -> str:
     parts.append("".join(box))
 
     # 数据来源
-    sources_html = "<br>".join(_inline(s) for s in spec["sources"])
+    sources_html = "<br>".join(_inline(s, keep_links=True) for s in spec["sources"])
     parts.append(
         f'<p style="font-size:12px; color:{MUTED}; line-height:1.8; margin:0;">'
         f'<strong style="color:{INK};">数据来源（均真实可查）</strong><br>{sources_html}</p>'

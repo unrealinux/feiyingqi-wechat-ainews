@@ -111,7 +111,9 @@ def _is_transport_error(err: Exception) -> bool:
     text = str(err).lower()
     if "rate limit" in text or "429" in text or "max connections" in text:
         return True
-    return "timed out" in text or "connection error" in text or "connection reset" in text
+    return (
+        "timed out" in text or "connection error" in text or "connection reset" in text
+    )
 
 
 def _resolve_provider(config: dict, name: str) -> Optional[dict]:
@@ -469,7 +471,9 @@ JSON 结构如下：
                     )
                 if _is_transport_error(e) and max_attempts < LLM_TRANSPORT_ATTEMPTS:
                     max_attempts += 1
-                    logger.info(f"传输层失败，再试一次（最多 {LLM_TRANSPORT_ATTEMPTS} 次）")
+                    logger.info(
+                        f"传输层失败，再试一次（最多 {LLM_TRANSPORT_ATTEMPTS} 次）"
+                    )
                     if "rate limit" in str(e).lower() or "429" in str(e):
                         time.sleep(30)  # 限流：立刻重试只会再被拒
 

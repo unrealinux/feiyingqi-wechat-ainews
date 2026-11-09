@@ -49,6 +49,33 @@ def test_inline_bold_and_escaping():
     assert "<strong>粗</strong>" in html
 
 
+def test_markdown_link_in_body_downgrades_to_plain_text():
+    """正文不支持站外链接：`[标题](url)` 不能以字面方括号出现在正文里。"""
+    html = et.render(_spec(sections=[
+        {"heading": "第一节", "accent": "red",
+         "blocks": [{"type": "p", "text": "见[量子位这篇](https://qbitai.com/1.html)"}]},
+        {"heading": "第二节", "accent": "green",
+         "blocks": [{"type": "bullets", "items": ["[36kr](https://36kr.com/p/1)"]}]},
+        {"heading": "第三节", "accent": "red",
+         "blocks": [{"type": "quote", "text": "[虎嗅](https://huxiu.com/a/1.html)"}]},
+    ]))
+    assert "[量子位这篇]" not in html and "https://qbitai.com/1.html" not in html
+    assert "见量子位这篇" in html
+    assert "[36kr]" not in html and "https://36kr.com/p/1" not in html
+    assert "[虎嗅]" not in html and "https://huxiu.com/a/1.html" not in html
+
+
+def test_sources_keep_their_urls_for_traceability():
+    """sources 是唯一保留链接的地方：溯源不能丢。"""
+    html = et.render(_spec(sources=[
+        "1. [量子位：某标题](https://qbitai.com/1.html)",
+        "2. 机器之心《另一篇》",
+    ]))
+    assert "https://qbitai.com/1.html" in html
+    assert "[量子位：某标题]" not in html
+    assert "量子位：某标题 https://qbitai.com/1.html" in html
+
+
 @pytest.mark.parametrize("field", ["title", "subtitle", "lead", "sections", "closing", "sources"])
 def test_missing_required_field_rejected(field):
     spec = _spec()
