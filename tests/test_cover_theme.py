@@ -49,3 +49,24 @@ class TestThemeSpecs:
         """“自动化”只能属于一个主题，否则同分平局会让封面随日期跳。"""
         owners = [n for n, s in _THEMES.items() if "自动化" in s["keywords"]]
         assert owners == ["workbench"]
+
+
+class TestImageEndpoint:
+    """文生图端点跟文本 LLM 共用 agnes.base_url，别再多一个只能改代码的硬编码。"""
+
+    def test_default_when_base_url_missing(self):
+        from src.ai_photo_cover import AGNES_API_BASE, _image_endpoint
+
+        assert _image_endpoint({"agnes": {}}) == f"{AGNES_API_BASE}/images/generations"
+
+    def test_respects_configured_base_url(self):
+        from src.ai_photo_cover import _image_endpoint
+
+        cfg = {"agnes": {"base_url": "https://proxy.example.com/v1"}}
+        assert _image_endpoint(cfg) == "https://proxy.example.com/v1/images/generations"
+
+    def test_trailing_slash_does_not_double_up(self):
+        from src.ai_photo_cover import _image_endpoint
+
+        cfg = {"agnes": {"base_url": "https://proxy.example.com/v1/"}}
+        assert _image_endpoint(cfg) == "https://proxy.example.com/v1/images/generations"

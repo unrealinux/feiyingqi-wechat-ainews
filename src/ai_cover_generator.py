@@ -170,10 +170,10 @@ class AICoverGenerator:
         """
         使用Agnes (Sapiens AI)生成图片
 
-        API文档: https://apihub.agnes-ai.com/v1/images/generations
+        API文档: https://api.agnes-ai.cn/v1/images/generations
         """
         response = requests.post(
-            "https://apihub.agnes-ai.com/v1/images/generations",
+            "https://api.agnes-ai.cn/v1/images/generations",
             headers={
                 "Authorization": f"Bearer {api_key}",
                 "Content-Type": "application/json",

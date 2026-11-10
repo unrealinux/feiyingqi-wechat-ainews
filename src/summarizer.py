@@ -45,7 +45,7 @@ class ThinMaterialError(LLMUnavailableError):
 _LLM_PROVIDERS = {
     "agnes": (
         "agnes",
-        "https://apihub.agnes-ai.com/v1",
+        "https://api.agnes-ai.cn/v1",
         "agnes-3.0-flash",
         "AGNES_API_KEY",
         "text_model",

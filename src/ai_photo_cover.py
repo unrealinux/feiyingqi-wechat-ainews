@@ -24,7 +24,15 @@ logger = logging.getLogger(__name__)
 
 COVER_WIDTH = 1440
 COVER_HEIGHT = 810  # 16:9，公众号封面标准尺寸
-AGNES_IMAGE_ENDPOINT = "https://apihub.agnes-ai.com/v1/images/generations"
+# 默认地址；实际用的地址由 config.yaml 的 agnes.base_url 覆盖（文本 LLM 用的是同一个键）
+AGNES_API_BASE = "https://api.agnes-ai.cn/v1"
+
+
+def _image_endpoint(config: dict) -> str:
+    """文生图端点：跟文本 LLM 共用 agnes.base_url，不填就用默认。"""
+    base = (get_agnes_config(config).get("base_url") or AGNES_API_BASE).rstrip("/")
+    return f"{base}/images/generations"
+
 
 # 写实风格主题池：key -> (关键词, 英文出图提示词)
 # 提示词统一要求 photo / photorealistic，并显式排除文字与水印，
@@ -242,12 +250,16 @@ def _load_font(size: int):
 
 
 def _fetch_agnes_image(
-    api_key: str, prompt: str, size: str = "1024x1024", timeout: int = 180
+    api_key: str,
+    prompt: str,
+    endpoint: str = "",
+    size: str = "1024x1024",
+    timeout: int = 180,
 ) -> Optional[bytes]:
     """调 Agnes 文生图并下载图片字节；失败返回 None（不抛异常）。"""
     try:
         resp = requests.post(
-            AGNES_IMAGE_ENDPOINT,
+            endpoint or f"{AGNES_API_BASE}/images/generations",
             headers={
                 "Authorization": f"Bearer {api_key}",
                 "Content-Type": "application/json",
@@ -392,7 +404,7 @@ def generate_ai_photo_cover(
     date_text = date_text or datetime.now().strftime("%Y年%m月%d日")
 
     logger.info(f"[封面] 主题={theme}，调用 Agnes 出图…")
-    raw = _fetch_agnes_image(api_key, prompt)
+    raw = _fetch_agnes_image(api_key, prompt, _image_endpoint(config))
     if not raw:
         return None, None
 

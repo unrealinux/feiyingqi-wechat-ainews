@@ -32,7 +32,8 @@ siliconflow:
 
 # Agnes (Sapiens AI) - 封面图生成 + 文本模型（同一把 key）
 agnes:
-  api_key: ""  # https://apihub.agnes-ai.com/
+  api_key: ""  # https://api.agnes-ai.cn/
+  # base_url: "https://api.agnes-ai.cn/v1"   # 文本 + 出图共用；换代理/自建网关时改这里
   model: "agnes-image-2.5-flash"   # 封面图模型
   text_model: "agnes-3.0-flash"    # 文本模型（llm.provider=agnes 时使用）
 
