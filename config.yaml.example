@@ -70,7 +70,7 @@ news:
 
 publish:
   author: "AI前沿观察"
-  default_cover: "cover.png"
+  default_cover: ""  # 留空：封面由生成器出图（AI 写实 → 渐变降级）
   default_digest: "每日AI资讯汇总，带你掌握AI行业最新动态"
 
 scheduler:

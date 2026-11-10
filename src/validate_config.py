@@ -191,20 +191,12 @@ class ConfigValidator:
                 )
             )
 
-        # 验证国内新闻源配置
+        # 验证国内新闻源配置（键表以 domestic_news 为准，避免两处漂移）
         domestic_sources = news.get("domestic_sources", {})
         if domestic_sources.get("enabled", False):
-            required_keys = [
-                "bing_china",
-                "baidu",
-                "weibo",
-                "zhihu",
-                "36kr",
-                "liangzi",
-                "jiqizhixin",
-                "huxiu",
-            ]
-            for key in required_keys:
+            from src.domestic_news import CONFIG_KEY_TO_SITE
+
+            for key in CONFIG_KEY_TO_SITE:
                 if key not in domestic_sources:
                     warnings.append(
                         ValidationError(
