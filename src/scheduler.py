@@ -168,14 +168,18 @@ def run_once() -> bool:
     logger.info("=" * 50)
 
     try:
-        # AGENTS.md：一天最多一篇草稿。当天已经人工发过就自动让路，
-        # 免得“定时一篇 + 手动一篇”变成一天两篇。
+        # 日产上限：默认 1 篇（AGENTS.md）。用户显式调高（scheduler.max_drafts_per_day）
+        # 时才允许一天多篇；当天已经写过就自动让路，不重复产出。
         from src.publisher import count_drafts_created_today
+        from src.config import load_config, get_scheduler_config
 
+        max_per_day = int(
+            get_scheduler_config(load_config()).get("max_drafts_per_day", 1) or 1
+        )
         already = count_drafts_created_today()
-        if already >= 1:
+        if already >= max_per_day:
             logger.info(
-                f"今天已有 {already} 篇草稿，按 AGENTS.md 每天 ≤1 篇跳过本次产出"
+                f"今天已有 {already} 篇草稿（上限 {max_per_day}），跳过本次产出"
             )
             return True
 

@@ -77,4 +77,6 @@ publish:
 scheduler:
   enabled: false
   time: "08:00"
+  # 每天最多几篇草稿。默认 1（AGENTS.md 红线）；调高前先想清楚降权风险
+  max_drafts_per_day: 1
   timezone: "Asia/Shanghai"

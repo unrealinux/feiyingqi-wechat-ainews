@@ -265,11 +265,12 @@ class TestScheduler(unittest.TestCase):
             self.assertEqual(resolved["api_key"], "", provider)
 
     def test_run_once_skips_when_today_quota_is_used(self):
-        """当天已有草稿时，定时任务必须自动让路（AGENTS.md 每天 ≤1 篇）。"""
+        """当天已有草稿且到达上限时，定时任务必须自动让路（默认上限 1 篇）。"""
         from unittest.mock import patch
         from src.scheduler import run_once
 
         with patch("src.publisher.count_drafts_created_today", return_value=1), \
+             patch("src.config.load_config", return_value={"scheduler": {}}), \
              patch("src.fetcher.fetch_news") as m_fetch, \
              patch("src.summarizer.Summarizer.generate_editorial_spec") as m_llm, \
              patch("src.publisher.publish_article") as m_publish:
@@ -325,3 +326,56 @@ class TestDateFilter(unittest.TestCase):
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
+
+
+class TestDailyQuotaLimit(unittest.TestCase):
+    """日产上限：默认 1 篇；用户调高 max_drafts_per_day 后要能真的一天多篇。"""
+
+    def test_second_run_allowed_when_limit_is_two(self):
+        from unittest.mock import patch, MagicMock
+        from src.scheduler import run_once
+
+        with patch("src.publisher.count_drafts_created_today", return_value=1), \
+             patch("src.config.load_config",
+                   return_value={"scheduler": {"max_drafts_per_day": 2}}), \
+             patch("src.fetcher.fetch_news", return_value=[MagicMock()]), \
+             patch("src.summarizer.Summarizer.generate_editorial_spec",
+                   return_value={"title": "第二篇"}), \
+             patch("src.editorial_template.draft_title", return_value="第二篇"), \
+             patch("src.editorial_template.render", return_value="<p>正文</p>"), \
+             patch("src.ai_photo_cover.generate_ai_photo_cover", return_value=(None, None)), \
+             patch("src.cover_generator.generate_gradient_cover", return_value=None), \
+             patch("src.publisher.publish_article", return_value=True) as m_publish:
+            result = run_once()
+
+        self.assertTrue(result)
+        self.assertTrue(m_publish.called, "上限是 2 时，当天第 2 篇必须照跑")
+
+    def test_third_run_skipped_at_limit_two(self):
+        from unittest.mock import patch
+        from src.scheduler import run_once
+
+        with patch("src.publisher.count_drafts_created_today", return_value=2), \
+             patch("src.config.load_config",
+                   return_value={"scheduler": {"max_drafts_per_day": 2}}), \
+             patch("src.fetcher.fetch_news") as m_fetch, \
+             patch("src.publisher.publish_article") as m_publish:
+            result = run_once()
+
+        self.assertTrue(result, "到达上限的让路不算失败")
+        self.assertFalse(m_fetch.called)
+        self.assertFalse(m_publish.called)
+
+    def test_default_limit_is_one(self):
+        from unittest.mock import patch, MagicMock
+        from src.scheduler import run_once
+
+        with patch("src.publisher.count_drafts_created_today", return_value=1), \
+             patch("src.config.load_config", return_value={"scheduler": {}}), \
+             patch("src.fetcher.fetch_news") as m_fetch, \
+             patch("src.publisher.publish_article") as m_publish:
+            result = run_once()
+
+        self.assertTrue(result)
+        self.assertFalse(m_fetch.called, "没配置上限时默认 1 篇，第 2 次必须让路")
+        self.assertFalse(m_publish.called)
