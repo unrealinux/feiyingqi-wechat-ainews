@@ -40,17 +40,17 @@ def test_preset_chapters_exist_or_skip_on_other_machines():
 
 def test_prefers_draft_box_over_ledger(monkeypatch):
     """用户手动删掉当天那篇后，不应该因为本地台账还记着就整天跳过。"""
-    monkeypatch.setattr(gw, "_remote_workbuddy_titles", lambda: [])
+    monkeypatch.setattr(gw, "_remote_material_titles", lambda _kw: [])
     monkeypatch.setattr(
-        gw, "_ledger_workbuddy_titles", lambda: ["WorkBuddy 已经删掉的稿"]
+        gw, "_ledger_material_titles", lambda _kw: ["WorkBuddy 已经删掉的稿"]
     )
-    assert gw.workbuddy_titles_today() == []
+    assert gw.material_titles_today("workbuddy") == []
 
 
 def test_falls_back_to_ledger_when_box_unreadable(monkeypatch):
-    monkeypatch.setattr(gw, "_remote_workbuddy_titles", lambda: None)
-    monkeypatch.setattr(gw, "_ledger_workbuddy_titles", lambda: ["WorkBuddy 台账里的稿"])
-    assert gw.workbuddy_titles_today() == ["WorkBuddy 台账里的稿"]
+    monkeypatch.setattr(gw, "_remote_material_titles", lambda _kw: None)
+    monkeypatch.setattr(gw, "_ledger_material_titles", lambda _kw: ["WorkBuddy 台账里的稿"])
+    assert gw.material_titles_today("workbuddy") == ["WorkBuddy 台账里的稿"]
 
 
 def test_ledger_filters_today_and_workbuddy(tmp_path, monkeypatch):
@@ -74,9 +74,28 @@ def test_ledger_filters_today_and_workbuddy(tmp_path, monkeypatch):
     )
     monkeypatch.setattr(monitoring, "DRAFT_LEDGER", ledger)
 
-    assert gw._ledger_workbuddy_titles() == ["WorkBuddy 今天的稿"]
+    assert gw._ledger_material_titles("WorkBuddy") == ["WorkBuddy 今天的稿"]
 
 
 def test_titles_today_missing_ledger_is_empty(tmp_path, monkeypatch):
     monkeypatch.setattr(monitoring, "DRAFT_LEDGER", tmp_path / "nope.jsonl")
-    assert gw._ledger_workbuddy_titles() == []
+    assert gw._ledger_material_titles("WorkBuddy") == []
+
+
+def test_doubao_presets_all_exist_on_disk():
+    """豆包那套选题的章节路径也要真的存在（路径写错 = 当天出不了稿）。"""
+    missing = [
+        rel for preset in gw.DOUBAO_PRESETS for rel, _ in preset["chapters"]
+        if not (gw.references_dir("doubaowork") / rel).exists()
+    ]
+    assert not missing, f"豆包素材里缺这些章节: {missing}"
+
+
+def test_material_spec_switches_presets_and_kicker():
+    """--material 切换后，选题表与封面口径必须跟着换（否则豆包稿会署成蓝皮书）。"""
+    wb, db = gw.material_spec("workbuddy"), gw.material_spec("doubaowork")
+    assert wb["presets"] is gw.PRESETS and db["presets"] is gw.DOUBAO_PRESETS
+    assert wb["name"] == "WorkBuddy" and db["name"] == "豆包工作"
+    assert "蓝皮书" in wb["footer"] and "指南" in db["footer"]
+    assert "蓝皮书" in gw.extra_instruction("workbuddy")
+    assert "豆包工作实战指南" in gw.extra_instruction("doubaowork")
