@@ -20,6 +20,7 @@ from src import editorial_template  # noqa: E402
 from src.ai_score import check_ai_score  # noqa: E402
 from src.fetcher import NewsItem  # noqa: E402
 from src.summarizer import Summarizer  # noqa: E402
+from src.materials import references_dir, source_label  # noqa: E402
 
 for _s in (sys.stdout, sys.stderr):
     if hasattr(_s, "reconfigure"):
@@ -28,14 +29,13 @@ for _s in (sys.stdout, sys.stderr):
 # 使用手册篇（第一篇）里最像"怎么用"的章节。
 # 注意：蓝皮书是社区项目（AlephAITech/WorkBuddyGuide, MIT, workbuddy.homes），
 # 不是腾讯官方文档 —— 署名不能搞错，产品界面/价格以官方为准（skill 里写明的三层区分）。
-SKILL_DIR = (
-    Path.home() / ".agents/skills/workbuddy-guide/skills/workbuddy-guide/references"
-)
+# 素材路径统一登记在 src/materials.py（原来这里写死的 ~/.agents/skills 早已不存在）
+SKILL_DIR = references_dir("workbuddy")
 BRAND_COVER = Path("output/workbuddy_cover_brand.jpg")  # 手绘品牌风封面，优先复用
 BODY_FILE = Path("output/workbuddy_body.html")
 TUTORIAL_BODY_FILE = Path("output/workbuddy_body_tutorial.html")
 CASES_BODY_FILE = Path("output/workbuddy_body_cases.html")
-SOURCE_LABEL = "《WorkBuddy 实战蓝皮书》（社区整理，非官方文档）"
+SOURCE_LABEL = source_label("workbuddy")
 
 EXTRA_INSTRUCTION = (
     "\n\n取材说明（必须体现到成稿里）：本篇素材来自社区整理的《WorkBuddy 实战蓝皮书》"
@@ -262,7 +262,7 @@ def publish_reviewed(preview_path: str, body_path: Path = BODY_FILE) -> int:
     )
     print("成功：草稿已建" if ok else "失败：见上文日志")
     if not ok:
-        _notify_failure(f"建草稿失败（{preset['name']}），见日志")
+        _notify_failure(f"建草稿失败（{preview.name}），见日志")
     return 0 if ok else 1
 
 
