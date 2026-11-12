@@ -1,11 +1,9 @@
 #!/usr/bin/env bash
-# Linux cron 入口：每天按 scheduler.max_drafts_per_day 的日产上限跑 main.py daily。
+# Linux cron 入口：08:00 出新闻稿，15:00 出工具指南（两套社区素材隔天轮换）。
 #
-# AGENTS.md 红线：只建草稿（main.py daily -> create_draft），绝不群发。
-# 时点由 cron 决定（crontab: 0 8,15 * * *）；这里只负责"今天够数了就不再跑"。
-#
-# 计数直接读 logs/drafts_created.jsonl（跟 main.py 内部的配额判断同一个来源），
-# 不再自己维护状态文件——两套计数会漂移（2026-11-11 实测就漂了一次）。
+# AGENTS.md 红线：两条路径都只建草稿（create_draft），绝不群发。
+# 日产上限读 scheduler.max_drafts_per_day，计数直接看 logs/drafts_created.jsonl
+# （跟 main.py 内部的配额判断同一个来源，不再自己维护状态文件）。
 #
 # crontab: 0 8,15 * * * /home/xieyingfei/文档/feiyingqi-wechat-ainews/scripts/run-daily.sh
 set -u
@@ -38,8 +36,22 @@ if [ "$done_today" -ge "$max" ]; then
     exit 0
 fi
 
-echo "== $(date '+%F %T') 开始 main.py daily（今天第 $((done_today + 1)) / $max 篇）"
-"$PY" main.py daily
+hour="$(date '+%H')"
+if [ "$hour" -lt 12 ]; then
+    echo "== $(date '+%F %T') 08:00 档：新闻稿（今天第 $((done_today + 1)) / $max 篇）"
+    "$PY" main.py daily
+else
+    # 15:00 档：工具指南。两套社区素材按当年第几天奇偶轮换，
+    # 同一套至少隔一天，避免连着两天一个模样。
+    if [ $(( 10#$(date '+%j') % 2 )) -eq 0 ]; then
+        material="doubaowork"
+    else
+        material="workbuddy"
+    fi
+    echo "== $(date '+%F %T') 15:00 档：工具指南（$material，今天第 $((done_today + 1)) / $max 篇）"
+    "$PY" scripts/gen_workbuddy_article.py --daily --material "$material"
+fi
+
 rc=$?
 echo "== $(date '+%F %T') 结束 rc=$rc"
 exit "$rc"

@@ -20,7 +20,7 @@ from src import editorial_template  # noqa: E402
 from src.ai_score import check_ai_score  # noqa: E402
 from src.fetcher import NewsItem  # noqa: E402
 from src.summarizer import Summarizer  # noqa: E402
-from src.materials import references_dir, source_label  # noqa: E402
+from src.materials import chapter_url, references_dir, source_label  # noqa: E402
 
 for _s in (sys.stdout, sys.stderr):
     if hasattr(_s, "reconfigure"):
@@ -43,6 +43,19 @@ EXTRA_INSTRUCTION = (
     "sources 里不要写成“腾讯《WorkBuddy 实战蓝皮书》”，要写清是社区整理、并只列实际用到的章节；"
     "涉及界面、价格、额度、权限时加一句“以 WorkBuddy 官方渠道为准”。"
 )
+DOUBAO_EXTRA_INSTRUCTION = (
+    "\n\n取材说明（必须体现到成稿里）：本篇素材来自社区整理的《豆包工作实战指南》"
+    "（GitHub: AlephAITech/DoubaoWorkGuide，站点 doubaowork.homes，MIT），**不是字节跳动官方文档**；"
+    "sources 里不要写成“字节《豆包工作实战指南》”，要写清是社区整理、并只列实际用到的章节"
+    "（每章都有 doubaowork.homes 的在线地址，能列就列全）；"
+    "涉及界面、价格、额度、权限时加一句“以豆包工作官方渠道为准”。"
+)
+
+
+def extra_instruction(material: str) -> str:
+    return DOUBAO_EXTRA_INSTRUCTION if material == "doubaowork" else EXTRA_INSTRUCTION
+
+
 # --tutorial 时叠加的结构要求：操作指南不能写成“深读”
 TUTORIAL_INSTRUCTION = (
     "\n\n本篇是**操作指南**，不是观点深读。硬要求："
@@ -99,7 +112,7 @@ DAILY_INSTRUCTION = (
     "③ 单独一节写“容易踩的坑”（额度/权限/本机与云端差异），每条给出绕法；"
     "④ 最后一节写“什么情况下不值得用”；"
     "⑤ 正文里不要写“第 N 章”这类章号，章号只在 sources 里出现；不要写“在上一篇文章中”这类延续性表述；"
-    "⑥ 标题必须以“WorkBuddy”开头，写成读者会搜的句式，10~28 个字。"
+    "⑥ 标题必须以“{name}”开头，写成读者会搜的句式，10~28 个字。"
 )
 
 PRESETS = [
@@ -177,10 +190,110 @@ PRESETS = [
         chapters=[
             ("chapters/part1-ch06.md", "第 6 章 专家和专家团"),
             ("chapters/part3-ch24.md", "第 25 章 如何进行多 Agent 系统设计"),
-            ("chapters/part4-ch26.md", "第 27 章 岗位路线图：不同岗位如何把 WorkBuddy 用深"),
+            (
+                "chapters/part4-ch26.md",
+                "第 27 章 岗位路线图：不同岗位如何把 WorkBuddy 用深",
+            ),
         ],
     ),
 ]
+
+
+# 豆包工作：另一套社区指南素材，15:00 那档跟 WorkBuddy 隔天轮换。
+# 章节相对路径都在 ~/文档/doubaowork-guide-skill/.../references/ 下。
+DOUBAO_PRESETS = [
+    dict(
+        name="装好并跑通第一个任务",
+        cover_sub="下载 → 登录 → 第一个任务",
+        cover_title="豆包工作上手|从装到第一个任务",
+        cover_label="下载 → 登录 → 任务 → 结果",
+        focus="下载安装与登录、主界面/任务/项目的关系、五分钟跑完第一个任务",
+        chapters=[
+            ("chapters/part1-02.md", "豆包工作的下载、安装和登录"),
+            ("chapters/part1-03.md", "主界面、任务和项目，一张图讲明白"),
+            ("chapters/part1-04.md", "五分钟跑完第一个豆包工作任务"),
+        ],
+    ),
+    dict(
+        name="Skill 与连接器怎么选",
+        cover_sub="Skill / 连接器 / API 三条路怎么分工",
+        cover_title="豆包工作|Skill 与连接器怎么选",
+        cover_label="先定场景 → 再选通道",
+        focus="Skill 怎么选怎么用、连接器怎么跑通一个能验收的小任务、API 服务与连接器怎么选",
+        chapters=[
+            ("chapters/part1-06.md", "豆包工作的 Skill 怎么选，怎么用"),
+            ("chapters/part1-05.md", "连接器怎么用，先跑一个能验收的小任务"),
+            ("chapters/part1-09.md", "API 服务和连接器，到底该怎么选？"),
+        ],
+    ),
+    dict(
+        name="定时任务",
+        cover_sub="定时任务怎么建才稳定出结果",
+        cover_title="豆包工作|定时任务怎么建",
+        cover_label="定时间 → 定产出 → 定验收",
+        focus="定时任务怎么建才能稳定产出结果、每天早上自动收到资讯简报、工作日报自动总结",
+        chapters=[
+            ("chapters/part1-10.md", "定时任务怎么建，才能稳定产出结果"),
+            ("chapters/part2-06.md", "每天早上自动收到一份能用的资讯简报"),
+            ("chapters/part3-personal-06.md", "自动总结工作日报，提醒每日工作事项"),
+        ],
+    ),
+    dict(
+        name="办公三件套",
+        cover_sub="一份材料接着做 Word / Excel / PPT",
+        cover_title="豆包工作|接着做 Word Excel PPT",
+        cover_label="给材料 → 说格式 → 验产出",
+        focus="一份材料怎么让它接着做 Word/Excel/PPT、Word 校对润色到排版交付、Excel 数据分析",
+        chapters=[
+            (
+                "chapters/part2-01.md",
+                "一份材料，怎么让豆包工作接着做 Word、Excel 和 PPT",
+            ),
+            ("chapters/part3-personal-03.md", "一份 Word，从校对润色到排版交付"),
+            ("chapters/part3-personal-04.md", "随意操作Excel，秒变数据分析大师"),
+        ],
+    ),
+    dict(
+        name="多 Agent 工作小队",
+        cover_sub="什么时候开小队，什么时候自己干",
+        cover_title="豆包工作|多 Agent 怎么用",
+        cover_label="拆任务 → 派角色 → 合结果",
+        focus="什么时候找工作伙伴/小队、多 Agent（工作小队）怎么用、常用指令模板怎么改",
+        chapters=[
+            ("chapters/part1-07.md", "什么时候找工作伙伴/小队，什么时候直接开新任务"),
+            ("chapters/part1-11.md", "多 Agent（工作小队）怎么用？"),
+            ("chapters/part1-12.md", "豆包工作常用指令模板，随手复制就能用"),
+        ],
+    ),
+    dict(
+        name="手机接管电脑任务",
+        cover_sub="出门之后怎么接着跑电脑上的活",
+        cover_title="豆包工作|手机接着跑",
+        cover_label="任务在电脑 → 验收在手机",
+        focus="怎么用手机操控电脑端豆包工作、出门以后怎么用手机接着跑电脑上的任务",
+        chapters=[
+            ("chapters/part1-08.md", "怎么用手机操控电脑端豆包工作"),
+            ("chapters/part2-04.md", "出门以后，怎么用手机接着跑电脑上的任务"),
+        ],
+    ),
+]
+
+
+def material_spec(material: str) -> dict:
+    """素材源 → 选题表与署名口径（两套都是社区整理，不是官方文档）。"""
+    if material == "doubaowork":
+        return {
+            "name": "豆包工作",
+            "presets": DOUBAO_PRESETS,
+            "kicker": "豆包工作 · 每日实操",
+            "footer": "素材出自社区整理指南，界面以官方为准",
+        }
+    return {
+        "name": "WorkBuddy",
+        "presets": PRESETS,
+        "kicker": "WorkBuddy · 每日实操",
+        "footer": "素材出自社区整理蓝皮书，界面以官方为准",
+    }
 
 
 def _excerpt(text: str, limit: int = 500) -> str:
@@ -192,19 +305,24 @@ def _excerpt(text: str, limit: int = 500) -> str:
     return " ".join(body)[:limit]
 
 
-def build_material(chapter_count: int, chapters=None):
+def build_material(chapter_count: int, chapters=None, material: str = "workbuddy"):
+    base = references_dir(material)
+    label_src = source_label(material)
     items = []
     for rel, label in (chapters or CHAPTERS)[:chapter_count]:
-        path = SKILL_DIR / rel
+        path = base / rel
         if not path.exists():
             print(f"跳过（不存在）: {path}")
             continue
+        text = path.read_text(encoding="utf-8")
         items.append(
             NewsItem(
                 title=label,
-                url="",  # 蓝皮书是本地文本，没有单章 URL，出处靠"蓝皮书 + 章号"
-                source=SOURCE_LABEL,
-                description=_excerpt(path.read_text(encoding="utf-8")),
+                # 豆包工作的章节头部带单章在线地址；WorkBuddy 只有上游 GitHub 路径，
+                # 没有 URL 时出处靠"蓝皮书 + 章号"（由 EXTRA_INSTRUCTION 约束署名）
+                url=chapter_url(text) or "",
+                source=label_src,
+                description=_excerpt(text),
             )
         )
     return items
@@ -213,7 +331,7 @@ def build_material(chapter_count: int, chapters=None):
 def publish_reviewed(preview_path: str, body_path: Path = BODY_FILE) -> int:
     """把已审阅的预览发成草稿：不重新生成正文，否则发的就不是你审的那一篇。
 
-    AGENTS.md：一天最多一篇草稿。当天已经发过就拒绝，不靠人记得。
+    日产上限按 config.yaml 的 scheduler.max_drafts_per_day（默认 1）。
     """
     import re
 
@@ -224,9 +342,10 @@ def publish_reviewed(preview_path: str, body_path: Path = BODY_FILE) -> int:
         print(f"没有可发的正文（先跑一次不带 --publish 的生成）: {body_path}")
         return 1
 
+    max_per_day = drafts_today_limit()
     already = count_drafts_created_today()
-    if already >= 1:
-        print(f"今天草稿箱里已有 {already} 篇，按 AGENTS.md 每天 ≤1 篇，拒绝再发。")
+    if already >= max_per_day:
+        print(f"今天草稿箱里已有 {already} 篇（上限 {max_per_day}），拒绝再发。")
         print("要今天发就先人工处理掉当天那篇，或明天再跑。")
         return 1
 
@@ -266,12 +385,14 @@ def publish_reviewed(preview_path: str, body_path: Path = BODY_FILE) -> int:
     return 0 if ok else 1
 
 
-def generate_article(chapters, instruction, preview_path, body_path):
+def generate_article(
+    chapters, instruction, preview_path, body_path, material: str = "workbuddy"
+):
     """出稿并落盘（预览 + 正文两份，publish 用的是 body）。返回 (title, html)。"""
-    items = build_material(len(chapters), chapters)
+    items = build_material(len(chapters), chapters, material=material)
     if not items:
         raise RuntimeError("没有可用素材")
-    print(f"素材: {len(items)} 个章节，来自 {SKILL_DIR}")
+    print(f"素材: {len(items)} 个章节，来自 {references_dir(material)}")
 
     spec = Summarizer().generate_editorial_spec(
         items, allow_mock=False, extra_instruction=instruction
@@ -289,8 +410,8 @@ def generate_article(chapters, instruction, preview_path, body_path):
     return title, html
 
 
-def _remote_workbuddy_titles():
-    """草稿箱里今天还没发出去的 WorkBuddy 稿；接口不可用返回 None。"""
+def _remote_material_titles(keyword: str):
+    """草稿箱里今天还没发出去的该产品稿；接口不可用返回 None。"""
     import requests
 
     from src.publisher import WeChatPublisher
@@ -314,27 +435,35 @@ def _remote_workbuddy_titles():
             item["content"]["news_item"][0]["title"]
             for item in data.get("item", [])
             if datetime.fromtimestamp(item["update_time"]).date() == today
-            and "WorkBuddy" in item["content"]["news_item"][0]["title"]
+            and keyword in item["content"]["news_item"][0]["title"]
         ]
     except Exception as e:
         print(f"读草稿箱失败，改用本地台账去重: {e}")
         return None
 
 
-def workbuddy_titles_today() -> list:
-    """今天草稿箱里已有的 WorkBuddy 稿（定时任务去重用，不靠人记得）。
+def drafts_today_limit() -> int:
+    """日产上限：config.yaml 的 scheduler.max_drafts_per_day（缺省 1）。"""
+    from src.config import get_scheduler_config, load_config
+
+    return int(get_scheduler_config(load_config()).get("max_drafts_per_day", 1) or 1)
+
+
+def material_titles_today(material: str = "workbuddy") -> list:
+    """今天草稿箱里已有的该产品稿（定时任务去重用，不靠人记得）。
 
     以草稿箱为准：用户手动删掉的稿不该继续占着“今天已发”的名额。
     接口读不到才退回本地台账 —— 宁可少发一篇，也不要同一天出两篇。
     """
-    remote = _remote_workbuddy_titles()
+    keyword = material_spec(material)["name"]
+    remote = _remote_material_titles(keyword)
     if remote is not None:
         return remote
-    return _ledger_workbuddy_titles()
+    return _ledger_material_titles(keyword)
 
 
-def _ledger_workbuddy_titles() -> list:
-    """本地台账里今天的 WorkBuddy 稿（草稿箱读不到时的兜底）。"""
+def _ledger_material_titles(keyword: str) -> list:
+    """本地台账里今天的该产品稿（草稿箱读不到时的兜底）。"""
     import json
 
     from src.monitoring import DRAFT_LEDGER  # 台账只有这一处定义，测试能替换掉
@@ -349,7 +478,7 @@ def _ledger_workbuddy_titles() -> list:
             record = json.loads(line)
         except json.JSONDecodeError:
             continue
-        if str(record.get("time", "")).startswith(today) and "WorkBuddy" in str(
+        if str(record.get("time", "")).startswith(today) and keyword in str(
             record.get("title", "")
         ):
             titles.append(record["title"])
@@ -370,45 +499,68 @@ def _notify_failure(reason: str) -> None:
         print(f"失败通知没发出去（不影响退出码）: {e}")
 
 
-def run_daily(force: bool = False, preset_name: str = "") -> int:
+def run_daily(
+    force: bool = False, preset_name: str = "", material: str = "workbuddy"
+) -> int:
     """定时任务入口：按星期轮换选题 → 出稿 → 建草稿（不群发）。
 
     没人先审预览，所以封面和 AI 味门禁由代码保证：publish_article 自带门禁，
     封面用本地手绘版式（不调外部出图，也不会挑错图）。
 
-    force / preset_name 只给人工临时补稿用；定时任务两个都不传，保持“一天一篇”。
+    material: workbuddy / doubaowork，两套社区指南素材，各自一套选题。
+    force / preset_name 只给人工临时补稿用；定时任务不需要。
     """
     from src.publisher import publish_article
 
-    if not SKILL_DIR.exists():
-        print(f"找不到技能目录: {SKILL_DIR}")
+    spec = material_spec(material)
+    refs = references_dir(material)
+    presets = spec["presets"]
+
+    if not refs.exists():
+        print(f"找不到素材目录: {refs}")
         return 1
 
-    done = workbuddy_titles_today()
+    from src.publisher import count_drafts_created_today
+
+    max_per_day = drafts_today_limit()
+    already_today = count_drafts_created_today()
+    if already_today >= max_per_day:
+        print(f"今天已有 {already_today} 篇草稿（上限 {max_per_day}），本次不产出。")
+        return 0
+
+    done = material_titles_today(material)
     if done and not force:
-        print(f"今天已有 WorkBuddy 草稿《{done[0]}》，本次跳过。")
+        print(f"今天已有 {spec['name']} 草稿《{done[0]}》，本次跳过。")
         return 0
     if done:
         print(f"今天已有 {len(done)} 篇，按人工要求强制再出一篇。")
 
     now = datetime.now()
-    preset = PRESETS[now.weekday() % len(PRESETS)]
+    preset = presets[now.weekday() % len(presets)]
     if preset_name:
-        match = [p for p in PRESETS if preset_name in p["name"]]
+        match = [p for p in presets if preset_name in p["name"]]
         if not match:
-            print(f"没有这个选题: {preset_name}（可选: {[p['name'] for p in PRESETS]}）")
+            print(
+                f"没有这个选题: {preset_name}（可选: {[p['name'] for p in presets]}）"
+            )
             return 1
         preset = match[0]
     print(f"今日选题: {preset['name']}（周{now.isoweekday()}）")
 
     stamp = now.strftime("%Y%m%d")
-    body_path = Path(f"output/workbuddy_body_{stamp}.html")
+    body_path = Path(f"output/{material}_body_{stamp}.html")
+    instruction = (
+        extra_instruction(material)
+        + DAILY_INSTRUCTION.format(name=spec["name"])
+        + f"\n\n本次聚焦：{preset['focus']}"
+    )
     try:
         title, html = generate_article(
             preset["chapters"],
-            EXTRA_INSTRUCTION + DAILY_INSTRUCTION + f"\n\n本次聚焦：{preset['focus']}",
-            f"output/preview_workbuddy_{stamp}.html",
+            instruction,
+            f"output/preview_{material}_{stamp}.html",
             body_path,
+            material=material,
         )
     except Exception as e:
         print(f"出稿失败，本次不建草稿: {e}")
@@ -418,7 +570,9 @@ def run_daily(force: bool = False, preset_name: str = "") -> int:
     from src.utils import html_to_text
 
     passed, report = check_ai_score(html_to_text(html))
-    print(f"标题: {title} | AI 味 {report['total_score']} {'通过' if passed else '不通过'}")
+    print(
+        f"标题: {title} | AI 味 {report['total_score']} {'通过' if passed else '不通过'}"
+    )
     if not passed:
         print("门禁不通过，不建草稿（预览已落盘，改完手动重跑）")
         _notify_failure(f"AI 味门禁拦截（{preset['name']}）: {report['total_score']}")
@@ -428,14 +582,14 @@ def run_daily(force: bool = False, preset_name: str = "") -> int:
     sys.path.insert(0, str(Path(__file__).resolve().parent))
     from build_workbuddy_cover import build as build_cover
 
-    cover = f"output/workbuddy_cover_{stamp}.jpg"
+    cover = f"output/{material}_cover_{stamp}.jpg"
     try:
         build_cover(
             cover,
             title_lines=preset["cover_title"].split("|"),
-            kicker=f"WorkBuddy · 每日实操 · {now.strftime('%Y-%m-%d')}",
+            kicker=f"{spec['kicker']} · {now.strftime('%Y-%m-%d')}",
             subtitle=preset["cover_sub"],
-            footer="素材出自社区整理蓝皮书，界面以官方为准",
+            footer=spec["footer"],
             variant="steps",
             steps_label=preset["cover_label"],
         )
@@ -458,7 +612,10 @@ def run_daily(force: bool = False, preset_name: str = "") -> int:
 def main():
     parser = argparse.ArgumentParser(description="用 workbuddy-guide 技能出使用向文章")
     parser.add_argument(
-        "--chapters", type=int, default=0, help="用前几章做素材（默认等于所选选题的章数）"
+        "--chapters",
+        type=int,
+        default=0,
+        help="用前几章做素材（默认等于所选选题的章数）",
     )
     parser.add_argument("--out", default="")
     parser.add_argument(
@@ -479,10 +636,18 @@ def main():
     parser.add_argument(
         "--daily",
         action="store_true",
-        help="定时任务模式：按星期轮换选题，直接出稿并建草稿（每天最多一篇 WorkBuddy）",
+        help="定时任务模式：按星期轮换选题，直接出稿并建草稿（每天最多一篇）",
     )
     parser.add_argument(
-        "--force", action="store_true", help="配合 --daily：今天已有 WorkBuddy 稿也再出一篇（人工补稿用）"
+        "--material",
+        default="workbuddy",
+        choices=["workbuddy", "doubaowork"],
+        help="素材源：workbuddy（蓝皮书）/ doubaowork（豆包工作指南）",
+    )
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        help="配合 --daily：今天已有 WorkBuddy 稿也再出一篇（人工补稿用）",
     )
     parser.add_argument(
         "--preset", default="", help="配合 --daily：指定选题名（不按星期轮换）"
@@ -490,7 +655,9 @@ def main():
     args = parser.parse_args()
 
     if args.daily:
-        return run_daily(force=args.force, preset_name=args.preset)
+        return run_daily(
+            force=args.force, preset_name=args.preset, material=args.material
+        )
 
     if args.cases:
         chapters, instruction, body_path = (
