@@ -132,15 +132,9 @@ class CoverGenerator:
         self._font_fallback_warned = False
 
         # 预加载常用字体路径
-        self._font_paths = [
-            "/System/Library/Fonts/PingFang.ttc",
-            "/System/Library/Fonts/STHeiti Light.ttc",
-            "/System/Library/Fonts/Helvetica.ttc",
-            "C:/Windows/Fonts/msyh.ttc",
-            "C:/Windows/Fonts/simhei.ttf",
-            "C:/Windows/Fonts/arial.ttf",
-            "/usr/share/fonts/truetype/droid/DroidSansFallbackFull.ttf",
-        ]
+        from src.fonts import CANDIDATES_BOLD, CANDIDATES_REGULAR
+
+        self._font_paths = list(dict.fromkeys(CANDIDATES_BOLD + CANDIDATES_REGULAR))
 
         # 缓存目录 (参考FeiqingqiWechatMP)
         self.cache_dir = Path("cache/covers")
@@ -1095,7 +1089,7 @@ def generate_gradient_cover(
 
     with_text=False 时只出背景（无标题/署名/日期），用作写实封面的降级方案。
     """
-    from PIL import Image, ImageDraw, ImageFont
+    from PIL import Image, ImageDraw
     import os
     import random
     import math
@@ -1176,14 +1170,9 @@ def generate_gradient_cover(
         draw = ImageDraw.Draw(img, "RGBA")
 
         def load_font(size):
-            for p in [
-                "C:/Windows/Fonts/msyhbd.ttc",
-                "C:/Windows/Fonts/msyh.ttc",
-                "C:/Windows/Fonts/simhei.ttf",
-            ]:
-                if os.path.exists(p):
-                    return ImageFont.truetype(p, size)
-            return ImageFont.load_default()
+            from src.fonts import load_font as _load_font
+
+            return _load_font(size)
 
         # 科技装饰：神经网络节点连线 + 粒子光点
         random.seed(len(title))  # 同一标题生成一致的装饰

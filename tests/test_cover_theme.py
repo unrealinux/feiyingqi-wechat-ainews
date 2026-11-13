@@ -70,3 +70,40 @@ class TestImageEndpoint:
 
         cfg = {"agnes": {"base_url": "https://proxy.example.com/v1/"}}
         assert _image_endpoint(cfg) == "https://proxy.example.com/v1/images/generations"
+
+
+class TestFontLookup:
+    """字体候选表必须跨平台：Linux 上没有 msyh.ttc，写死 Windows 路径就出不了图。"""
+
+    def test_finds_a_cjk_font_on_this_machine(self):
+        from src.fonts import find_font
+
+        for bold in (True, False):
+            path = find_font(bold=bold)
+            assert path, f"本机找不到中文字体（bold={bold}），封面会退化成兜底图"
+
+    def test_load_font_never_raises(self):
+        from src.fonts import load_font
+
+        assert load_font(24) is not None
+        assert load_font(24, bold=False) is not None
+
+    def test_brand_cover_builds_without_font_error(self, tmp_path):
+        """品牌风封面（工具指南用的那张）在 Linux 上要能真的画出来。"""
+        import sys
+        from pathlib import Path
+
+        sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
+        from build_workbuddy_cover import build
+
+        out = tmp_path / "cover.jpg"
+        build(
+            str(out),
+            title_lines=["标题第一行", "标题第二行"],
+            kicker="测试 · 2026-11-13",
+            subtitle="副标题",
+            footer="页脚",
+            variant="steps",
+            steps_label="一 → 二 → 三",
+        )
+        assert out.exists() and out.stat().st_size > 5000

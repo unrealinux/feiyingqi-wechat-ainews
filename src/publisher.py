@@ -1084,7 +1084,10 @@ def publish_article(
         # 只在这条失败路径上重试，正常发布的封面不动。
         safe_cover = _normalize_cover_for_wechat(cover_path)
         if safe_cover:
-            logger.warning(f"改用 {safe_cover} 重试建草稿（封面被微信拒绝）")
+            logger.warning(
+                f"建草稿失败，改用 {safe_cover} 重试一次"
+                "（原因见上文日志：可能是封面尺寸，也可能是 token/IP 白名单/网络）"
+            )
             media_id = publisher.create_draft(
                 title=title,
                 content=html_content,

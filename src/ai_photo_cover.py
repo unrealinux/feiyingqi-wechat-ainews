@@ -208,14 +208,6 @@ _THEMES = {
     },
 }
 
-_FONT_CANDIDATES = [
-    "C:/Windows/Fonts/msyhbd.ttc",
-    "C:/Windows/Fonts/msyh.ttc",
-    "C:/Windows/Fonts/simhei.ttf",
-    "/System/Library/Fonts/PingFang.ttc",
-    "/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc",
-]
-
 
 def pick_theme(title: str, seed: Optional[int] = None) -> str:
     """按标题关键词选主题；没有关键词命中时按日期轮换，保证封面不重样。"""
@@ -238,15 +230,9 @@ def pick_theme(title: str, seed: Optional[int] = None) -> str:
 
 
 def _load_font(size: int):
-    from PIL import ImageFont
+    from src.fonts import load_font
 
-    for path in _FONT_CANDIDATES:
-        if Path(path).exists():
-            try:
-                return ImageFont.truetype(path, size)
-            except Exception:
-                continue
-    return ImageFont.load_default()
+    return load_font(size)
 
 
 def _fetch_agnes_image(

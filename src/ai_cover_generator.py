@@ -361,13 +361,10 @@ class AICoverGenerator:
             img = Image.open(BytesIO(image_data))
             draw = ImageDraw.Draw(img)
 
-            # 尝试加载字体
-            font_paths = [
-                "C:/Windows/Fonts/msyh.ttc",
-                "C:/Windows/Fonts/simhei.ttf",
-                "/System/Library/Fonts/PingFang.ttc",
-                "/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc",
-            ]
+            # 尝试加载字体（候选表见 src/fonts，跨平台）
+            from src.fonts import CANDIDATES_BOLD, CANDIDATES_REGULAR
+
+            font_paths = list(dict.fromkeys(CANDIDATES_BOLD + CANDIDATES_REGULAR))
 
             font_title = None
             font_date = None

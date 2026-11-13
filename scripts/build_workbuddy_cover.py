@@ -15,7 +15,7 @@ from pathlib import Path
 
 sys.stdout.reconfigure(encoding="utf-8")
 
-from PIL import Image, ImageDraw, ImageFont  # noqa: E402
+from PIL import Image, ImageDraw  # noqa: E402
 
 W, H = 1440, 810
 THUMB_RATIO = 2.35  # 微信列表缩略图比例：关键信息要落在中间这条带里
@@ -31,19 +31,12 @@ STEPS_LABEL = "安装 → 第一个任务 → Skill → 自动化"
 INK = (16, 16, 16)
 TILE = (255, 255, 255)
 
-FONTS = [
-    "C:/Windows/Fonts/msyhbd.ttc",
-    "C:/Windows/Fonts/msyh.ttc",
-    "C:/Windows/Fonts/simhei.ttf",
-]
-
 
 def font(size, bold=True):
-    order = FONTS if bold else FONTS[1:] + FONTS[:1]
-    for path in order:
-        if Path(path).exists():
-            return ImageFont.truetype(path, size)
-    raise RuntimeError("找不到可用中文字体")
+    """中文字体走 src/fonts 的跨平台候选表（Linux 上原来是直接抛异常的）。"""
+    from src.fonts import load_font
+
+    return load_font(size, bold=bold)
 
 
 def draw_tracked(draw, xy, text, fnt, fill, tracking=8):
