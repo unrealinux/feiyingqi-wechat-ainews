@@ -99,3 +99,15 @@ def test_material_spec_switches_presets_and_kicker():
     assert "蓝皮书" in wb["footer"] and "指南" in db["footer"]
     assert "蓝皮书" in gw.extra_instruction("workbuddy")
     assert "豆包工作实战指南" in gw.extra_instruction("doubaowork")
+
+
+def test_build_material_uses_doubao_chapters_and_urls():
+    """切到豆包素材时，章节、署名、单章链接都必须来自豆包那套（不是蓝皮书）。"""
+    items = gw.build_material(
+        2, gw.DOUBAO_PRESETS[0]["chapters"], material="doubaowork"
+    )
+    assert len(items) == 2
+    for item in items:
+        assert "豆包工作实战指南" in item.source
+        assert "蓝皮书" not in item.source
+        assert item.url.startswith("https://doubaowork.homes/#/p/")
