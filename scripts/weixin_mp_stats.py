@@ -17,6 +17,7 @@ mp 走直连（不经 JP 出口），避免异地安全校验。
 子命令：login / whoami / stats / selftest
 输出：stats 打印与 account_stats.py/bili_login.py 一致的统一 JSON dict（stdout 末行以 { 开头）。
 """
+
 import argparse
 import json
 import os
@@ -35,20 +36,33 @@ else:
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import login_state  # noqa: E402
 
-PROJECT_ROOT = Path(__file__).resolve().parents[3]
-LOGIN_DIR = PROJECT_ROOT / "outputs" / "_login"
+# 本仓库里的位置是 <repo>/scripts/weixin_mp_stats.py，所以仓库根 = parents[1]。
+# 上游 Easel 里这个脚本埋得更深（parents[3]），搬过来时没改，导致会话被写到 ~/outputs/_login。
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+LOGIN_DIR = PROJECT_ROOT / "output" / "_login"
 PROFILE_NAME = "WeixinMpProfile"
 MP_HOME = "https://mp.weixin.qq.com/"
 LAUNCH_ARGS = [
     "--disable-blink-features=AutomationControlled",
-    "--no-sandbox", "--disable-dev-shm-usage", "--disable-gpu",
+    "--no-sandbox",
+    "--disable-dev-shm-usage",
+    "--disable-gpu",
 ]
 TOKEN_RE = re.compile(r"[?&]token=(\d+)")
 
 EMPTY = {
-    "platform": "wechat-oa", "name": "微信公众号", "nickname": "",
-    "loggedIn": False, "followers": None, "likes": None, "following": None, "posts": None,
-    "reads": None, "metrics": [], "notes": [], "overview": [],
+    "platform": "wechat-oa",
+    "name": "微信公众号",
+    "nickname": "",
+    "loggedIn": False,
+    "followers": None,
+    "likes": None,
+    "following": None,
+    "posts": None,
+    "reads": None,
+    "metrics": [],
+    "notes": [],
+    "overview": [],
     "period_metrics": {},
     "growth": {"last": None, "day": None, "week": None, "month": None, "year": None},
     "fetched_at": "",
@@ -79,10 +93,13 @@ def resolve_content_image(src, html_path):
         return None
     media = _API_MEDIA.search(src)
     if media:
-        parts = Path(src[media.end():]).parts
+        parts = Path(src[media.end() :]).parts
         if not parts or any(part in {"", ".", ".."} for part in parts):
             return None
-        if str(parts[0]).startswith(("_", ".")) or str(parts[0]).lower() in {"analytics", "wechat"}:
+        if str(parts[0]).startswith(("_", ".")) or str(parts[0]).lower() in {
+            "analytics",
+            "wechat",
+        }:
             return None
         candidate = (PROJECT_ROOT / "outputs").joinpath(*parts).resolve()
         try:
@@ -92,7 +109,11 @@ def resolve_content_image(src, html_path):
         if candidate.suffix.lower() in _IMG_OK and candidate.is_file():
             return candidate
         return None
-    if src.lower().startswith("http://") or src.lower().startswith("https://") or src.startswith("//"):
+    if (
+        src.lower().startswith("http://")
+        or src.lower().startswith("https://")
+        or src.startswith("//")
+    ):
         return None
     img = Path(src)
     if not img.is_absolute() and not img.is_file():
@@ -121,7 +142,9 @@ def _lock_profile(prof):
             fh.close()
         except OSError:
             pass
-        raise RuntimeError("公众号后台会话正被占用，请等当前登录、数据同步或另一篇草稿结束后再试。")
+        raise RuntimeError(
+            "公众号后台会话正被占用，请等当前登录、数据同步或另一篇草稿结束后再试。"
+        )
     return fh
 
 
@@ -155,10 +178,15 @@ def _launch(p, headed, base, proxy):
     prof = _profile_dir(base)
     prof.mkdir(parents=True, exist_ok=True)
     lock = _lock_profile(prof)
-    kw = dict(headless=not headed, locale="zh-CN", args=LAUNCH_ARGS,
-              viewport={"width": 1440, "height": 900})
-    # LOCAL PATCH: 本机没下载 Playwright Chromium，用系统 Edge（channel=msedge）
-    channel = os.environ.get("WMP_BROWSER_CHANNEL", "msedge").strip()
+    kw = dict(
+        headless=not headed,
+        locale="zh-CN",
+        args=LAUNCH_ARGS,
+        viewport={"width": 1440, "height": 900},
+    )
+    # 默认用 Playwright 自带的 Chromium；要用系统 Edge 时设 WMP_BROWSER_CHANNEL=msedge
+    # （原来默认写死 msedge，Linux 上没有 Edge，必崩）
+    channel = os.environ.get("WMP_BROWSER_CHANNEL", "").strip()
     if channel:
         kw["channel"] = channel
     # mp 为国内站，直连即可。仅显式 --proxy 时才走代理；否则不传 proxy，
@@ -199,9 +227,13 @@ def _account_identity(page):
     for container in page.query_selector_all(".weui-desktop-account"):
         if not container.is_visible():
             continue
-        name = container.query_selector(".weui-desktop-account__nickname, .account_nickname")
-        avatar = container.query_selector(".weui-desktop-account__thumb img, img.weui-desktop-account__thumb, "
-                                          ".weui-desktop-account__avatar img")
+        name = container.query_selector(
+            ".weui-desktop-account__nickname, .account_nickname"
+        )
+        avatar = container.query_selector(
+            ".weui-desktop-account__thumb img, img.weui-desktop-account__thumb, "
+            ".weui-desktop-account__avatar img"
+        )
         if name and name.is_visible():
             text = (name.inner_text() or "").strip()
             if text:
@@ -212,7 +244,12 @@ def _account_identity(page):
                 source = "https:" + source
             try:
                 parsed = urlparse(source)
-                if parsed.scheme in ("https", "http") and parsed.hostname and not parsed.username and not parsed.password:
+                if (
+                    parsed.scheme in ("https", "http")
+                    and parsed.hostname
+                    and not parsed.username
+                    and not parsed.password
+                ):
                     identity["avatar"] = source
             except ValueError:
                 pass
@@ -272,8 +309,11 @@ def cmd_login(a):
         return _run_login(a)
     except Exception as exc:
         # 异常类型对用户可见；不把可能包含会话令牌的浏览器异常全文写进状态。
-        login_state.write_status(a.status_file, "error",
-                                 f"公众号登录失败（{type(exc).__name__}），请检查浏览器、网络及会话占用")
+        login_state.write_status(
+            a.status_file,
+            "error",
+            f"公众号登录失败（{type(exc).__name__}），请检查浏览器、网络及会话占用",
+        )
         print(f"login failed: {type(exc).__name__}", file=sys.stderr, flush=True)
         return 1
     finally:
@@ -282,6 +322,7 @@ def cmd_login(a):
 
 def _run_login(a):
     from playwright.sync_api import sync_playwright
+
     status = a.status_file
     qr_out = a.qr_out or str(LOGIN_DIR / "wechat-oa-mp.png")
     login_state.write_status(status, "starting", "启动 mp 后台登录…")
@@ -302,11 +343,15 @@ def _run_login(a):
                 raise RuntimeError("二维码截图失败")
             if a.headed:
                 login_state.write_status(
-                    status, "window_login",
+                    status,
+                    "window_login",
                     "请在弹出的浏览器窗口里用管理员微信扫码，不要关掉那个窗口。也可以扫下面这张图。",
-                    qr=str(qr_out))
+                    qr=str(qr_out),
+                )
             else:
-                login_state.write_status(status, "qr_ready", "请用公众号管理员微信扫码", qr=str(qr_out))
+                login_state.write_status(
+                    status, "qr_ready", "请用公众号管理员微信扫码", qr=str(qr_out)
+                )
             deadline = time.time() + a.timeout
             next_capture = time.monotonic() + 5
             while time.time() < deadline:
@@ -321,7 +366,9 @@ def _run_login(a):
                     return 0
                 # 二维码可能刷新，定期重截
                 try:
-                    if time.monotonic() >= next_capture and not _extract_token(page.url):
+                    if time.monotonic() >= next_capture and not _extract_token(
+                        page.url
+                    ):
                         _capture_qr(page, qr_out, attempts=1, fallback=False)
                         next_capture = time.monotonic() + 5
                 except Exception:
@@ -347,6 +394,7 @@ def _fetch_json(page, url):
 
 def cmd_stats(a):
     from playwright.sync_api import sync_playwright
+
     result = dict(EMPTY)
     result["fetched_at"] = _now()
     cap = {"publish": None, "tendency": None, "article_list": None, "user": None}
@@ -362,8 +410,12 @@ def cmd_stats(a):
                 cap["tendency"] = resp.text()
             elif "get_article_list" in u and cap["article_list"] is None:
                 cap["article_list"] = resp.text()
-            elif ("usersummary" in u or "get_user_summary" in u or "usercumulate" in u
-                  or "user_cumulate" in u) and cap["user"] is None:
+            elif (
+                "usersummary" in u
+                or "get_user_summary" in u
+                or "usercumulate" in u
+                or "user_cumulate" in u
+            ) and cap["user"] is None:
                 cap["user"] = resp.text()
         except Exception:
             pass
@@ -382,16 +434,24 @@ def cmd_stats(a):
                 return 1
             result["loggedIn"] = True
             # 打开发表记录页，让 Vue 自然发出带正确参数的数据 XHR（我们拦截它，避免自己拼易变参数/fingerprint）
-            page.goto(f"https://mp.weixin.qq.com/cgi-bin/appmsgpublish?sub=list&begin=0&count={a.count}"
-                      f"&token={token}&lang=zh_CN", wait_until="commit", timeout=60000)
+            page.goto(
+                f"https://mp.weixin.qq.com/cgi-bin/appmsgpublish?sub=list&begin=0&count={a.count}"
+                f"&token={token}&lang=zh_CN",
+                wait_until="commit",
+                timeout=60000,
+            )
             for _ in range(10):
                 if cap["publish"]:
                     break
                 page.wait_for_timeout(1000)
             # 打开数据分析页，触发阅读/分享趋势 + 单篇文章数据 + 用户数据 XHR
             try:
-                page.goto(f"https://mp.weixin.qq.com/misc/appmsganalysis?action=report&type=daily_v2"
-                          f"&token={token}&lang=zh_CN", wait_until="commit", timeout=60000)
+                page.goto(
+                    f"https://mp.weixin.qq.com/misc/appmsganalysis?action=report&type=daily_v2"
+                    f"&token={token}&lang=zh_CN",
+                    wait_until="commit",
+                    timeout=60000,
+                )
                 for _ in range(8):
                     if cap["tendency"] and cap["article_list"]:
                         break
@@ -429,24 +489,33 @@ def _deep_find(obj, keys, out):
 def _parse_publish(raw, result):
     """解析 appmsgpublish 数据 XHR 的 JSON → notes[] / posts / metrics。
     结构：外层 JSON.publish_page 是转义 JSON 字符串，内含 total_count/publish_count/
-    masssend_count 和 publish_list[]；每条 publish_info 又是转义 JSON，含文章 appmsgex/appmsg_info。"""
+    masssend_count 和 publish_list[]；每条 publish_info 又是转义 JSON，含文章 appmsgex/appmsg_info。
+    """
     if not raw:
         result["error"] = "未捕获到发表记录数据（会话可能失效，重新 login）"
         return
     try:
         d = json.loads(raw)
-        page = json.loads(d.get("publish_page", "{}")) if isinstance(d.get("publish_page"), str) else (d.get("publish_page") or {})
+        page = (
+            json.loads(d.get("publish_page", "{}"))
+            if isinstance(d.get("publish_page"), str)
+            else (d.get("publish_page") or {})
+        )
         total = int(page.get("total_count", 0) or 0)
         pub_cnt = int(page.get("publish_count", 0) or 0)
         mass_cnt = int(page.get("masssend_count", 0) or 0)
         notes, total_read, like_sum = [], 0, 0
-        for it in (page.get("publish_list") or []):
+        for it in page.get("publish_list") or []:
             info = it.get("publish_info")
             info = json.loads(info) if isinstance(info, str) else (info or {})
             arts = info.get("appmsgex") or info.get("appmsg_info") or []
             if not arts:
                 found = {}
-                _deep_find(info, {"title", "link", "content_url", "read_num", "like_num", "cover"}, found)
+                _deep_find(
+                    info,
+                    {"title", "link", "content_url", "read_num", "like_num", "cover"},
+                    found,
+                )
                 if found:
                     arts = [found]
             for am in arts:
@@ -454,12 +523,14 @@ def _parse_publish(raw, result):
                 ln = int(am.get("like_num", 0) or 0)
                 total_read += rn
                 like_sum += ln
-                notes.append({
-                    "title": am.get("title", ""),
-                    "url": am.get("link") or am.get("content_url", ""),
-                    "cover": am.get("cover", ""),
-                    "stat": (f"阅读 {rn} · 赞 {ln}" if rn or ln else ""),
-                })
+                notes.append(
+                    {
+                        "title": am.get("title", ""),
+                        "url": am.get("link") or am.get("content_url", ""),
+                        "cover": am.get("cover", ""),
+                        "stat": (f"阅读 {rn} · 赞 {ln}" if rn or ln else ""),
+                    }
+                )
         result["notes"] = notes[:20]
         published = pub_cnt or total or len(notes)
         result["posts"] = published
@@ -471,7 +542,9 @@ def _parse_publish(raw, result):
             {"label": "发表记录总数", "value": total, "vs": ""},
         ]
         if total_read:
-            result["metrics"].append({"label": "列表累计阅读", "value": total_read, "vs": ""})
+            result["metrics"].append(
+                {"label": "列表累计阅读", "value": total_read, "vs": ""}
+            )
     except Exception as e:
         result["error"] = f"发表记录解析失败：{e}"
 
@@ -496,7 +569,9 @@ def _parse_analytics(cap, result):
     try:
         if cap.get("tendency"):
             d = json.loads(cap["tendency"])
-            daily = _daily_totals((d.get("all_article_stat_tendency") or {}).get("list") or [])
+            daily = _daily_totals(
+                (d.get("all_article_stat_tendency") or {}).get("list") or []
+            )
             read = sum(int(x.get("read_uv", 0) or 0) for x in daily)
             result["reads"] = read or result.get("reads")
             result["period_metrics"] = {
@@ -514,16 +589,28 @@ def _parse_analytics(cap, result):
             d = json.loads(cap["article_list"])
             by_title = {}
             extras = []
-            for a in (d.get("article_list") or []):
+            for a in d.get("article_list") or []:
                 info = a.get("appmsg_info") or a
                 title = info.get("title") or a.get("title")
                 if not title:
                     continue
-                uv = int(info.get("total_read_uv") or info.get("read_num") or info.get("int_page_read_uv") or 0)
+                uv = int(
+                    info.get("total_read_uv")
+                    or info.get("read_num")
+                    or info.get("int_page_read_uv")
+                    or 0
+                )
                 share = int(info.get("share_num") or info.get("share_uv") or 0)
                 stat = f"阅读 {uv} · 分享 {share}"
                 by_title[title] = stat
-                extras.append({"title": title, "url": info.get("link") or info.get("content_url") or "", "cover": info.get("cover") or "", "stat": stat})
+                extras.append(
+                    {
+                        "title": title,
+                        "url": info.get("link") or info.get("content_url") or "",
+                        "cover": info.get("cover") or "",
+                        "stat": stat,
+                    }
+                )
             for n in result.get("notes", []):
                 if n.get("title") in by_title:
                     n["stat"] = by_title[n["title"]]
@@ -536,7 +623,9 @@ def _parse_analytics(cap, result):
         if cap.get("user"):
             d = json.loads(cap["user"])
             found = {}
-            _deep_find(d, {"cumulate_user", "user_cumulate", "total_user", "cur_user"}, found)
+            _deep_find(
+                d, {"cumulate_user", "user_cumulate", "total_user", "cur_user"}, found
+            )
             if found:
                 result["followers"] = int(next(iter(found.values())) or 0)
     except Exception:
@@ -564,7 +653,7 @@ def _fetch_followers(page, token, result):
             page.wait_for_timeout(1500)
             html = page.content()
             m = re.search(r"(累计关注|关注用户|粉丝数)[^\d%]{0,12}(\d[\d,]*)", html)
-            if m and "%" not in html[m.end(): m.end() + 2]:
+            if m and "%" not in html[m.end() : m.end() + 2]:
                 result["followers"] = int(m.group(2).replace(",", ""))
                 return
             txt = page.inner_text("body")
@@ -580,7 +669,12 @@ def _fetch_followers(page, token, result):
 def _apply_nickname(page, result):
     if result.get("nickname") and result["nickname"] != result.get("name"):
         return
-    for sel in (".weui-desktop-account__nickname", ".account_nickname", "#nickname", ".weui-desktop-account__info"):
+    for sel in (
+        ".weui-desktop-account__nickname",
+        ".account_nickname",
+        "#nickname",
+        ".weui-desktop-account__info",
+    ):
         try:
             el = page.query_selector(sel)
             if el:
@@ -596,6 +690,7 @@ def _apply_nickname(page, result):
 
 def _attach_growth(result):
     import account_stats
+
     now = int(time.time())
     snap = {
         "ts": now,
@@ -606,7 +701,9 @@ def _attach_growth(result):
     }
     history = account_stats.load_history("wechat-oa")
     result["growth"] = account_stats.growth_windows(history, snap)
-    if not result.get("error") and any(snap.get(k) is not None for k in ("followers", "likes", "posts")):
+    if not result.get("error") and any(
+        snap.get(k) is not None for k in ("followers", "likes", "posts")
+    ):
         account_stats.record_snapshot("wechat-oa", snap)
     result["overview"] = [
         {"key": "followers", "label": "粉丝", "value": result.get("followers")},
@@ -625,8 +722,10 @@ def _editor_ctx(page, token):
     实测该 CDN 偶发 TLS 握手卡死时，page.goto()+page.content() 会停在只有 <head> 的空壳、
     读不到 ticket（误报“编辑器改版 / 未取到 ticket”）；纯 HTTP 抓服务端 HTML 不受此影响。
     纯 HTTP 少数情况下没拿到时，再退回浏览器渲染兜底。"""
-    edit = (f"https://mp.weixin.qq.com/cgi-bin/appmsg?t=media/appmsg_edit_v2&action=edit&isNew=1"
-            f"&type=77&createType=0&token={token}&lang=zh_CN")
+    edit = (
+        f"https://mp.weixin.qq.com/cgi-bin/appmsg?t=media/appmsg_edit_v2&action=edit&isNew=1"
+        f"&type=77&createType=0&token={token}&lang=zh_CN"
+    )
 
     def grab(key, html):
         m = re.search(rf'{key}["\']?\s*[:=]\s*["\']?([\w%.-]+)', html)
@@ -650,8 +749,11 @@ def _editor_ctx(page, token):
         except Exception:
             pass
 
-    return {"ticket": grab("ticket", html), "user_name": grab("user_name", html),
-            "nick_name": grab("nick_name", html)}
+    return {
+        "ticket": grab("ticket", html),
+        "user_name": grab("user_name", html),
+        "nick_name": grab("nick_name", html),
+    }
 
 
 def cmd_publish(a):
@@ -659,6 +761,7 @@ def cmd_publish(a):
     步骤：编辑器取 ticket → filetransfer 传封面 → operate_appmsg sub=create 建草稿。"""
     from playwright.sync_api import sync_playwright
     import time as _t
+
     out = {"success": False, "media_id": "", "error": None}
     html = Path(a.html).read_text(encoding="utf-8")
     title = a.title[:64]
@@ -668,25 +771,40 @@ def cmd_publish(a):
         ctx = _launch(p, a.headed, a.profile_base, _proxy(a.proxy, a.no_proxy))
         page = ctx.pages[0] if ctx.pages else ctx.new_page()
         try:
-            page.goto(MP_HOME, wait_until="commit", timeout=60000); page.wait_for_timeout(1500)
+            page.goto(MP_HOME, wait_until="commit", timeout=60000)
+            page.wait_for_timeout(1500)
             token = _extract_token(page.url)
             if not token:
-                out["error"] = "未登录 mp 后台，请先 login 扫码"; print(json.dumps(out, ensure_ascii=False)); return 1
+                out["error"] = "未登录 mp 后台，请先 login 扫码"
+                print(json.dumps(out, ensure_ascii=False))
+                return 1
             info = _editor_ctx(page, token)
             if not info.get("ticket"):
-                out["error"] = "未取到上传 ticket（编辑器页结构可能变化）"; print(json.dumps(out, ensure_ascii=False)); return 1
+                out["error"] = "未取到上传 ticket（编辑器页结构可能变化）"
+                print(json.dumps(out, ensure_ascii=False))
+                return 1
 
             # 上传素材统一走 filetransfer?action=upload_material&writetype=doublewrite
             # （真实编辑器用的接口；uploadimg2cdn 在会话模式下常返回 errcode -1 / invalid referrer，
             #  且响应里的 cdn_url 才是新版编辑器识别封面/正文图所需的字段）
             def _upload_material(fpath, mime):
                 svr = str(int(_t.time() * 1000))
-                u = (f"https://mp.weixin.qq.com/cgi-bin/filetransfer?action=upload_material&f=json&scene=8"
-                     f"&writetype=doublewrite&groupid=1&ticket_id={info['user_name']}&ticket={info['ticket']}"
-                     f"&svr_time={svr}&token={token}&lang=zh_CN")
-                rr = page.request.post(u, multipart={
-                    "file": {"name": fpath.name, "mimeType": mime, "buffer": fpath.read_bytes()}},
-                    headers={"Referer": page.url})
+                u = (
+                    f"https://mp.weixin.qq.com/cgi-bin/filetransfer?action=upload_material&f=json&scene=8"
+                    f"&writetype=doublewrite&groupid=1&ticket_id={info['user_name']}&ticket={info['ticket']}"
+                    f"&svr_time={svr}&token={token}&lang=zh_CN"
+                )
+                rr = page.request.post(
+                    u,
+                    multipart={
+                        "file": {
+                            "name": fpath.name,
+                            "mimeType": mime,
+                            "buffer": fpath.read_bytes(),
+                        }
+                    },
+                    headers={"Referer": page.url},
+                )
                 try:
                     return rr.json()
                 except Exception:
@@ -697,18 +815,28 @@ def cmd_publish(a):
             up = _upload_material(cover, "image/jpeg")
             content = up.get("content")
             if isinstance(content, str):
-                thumb_media_id = content            # filetransfer 直接返回 media_id 字符串
+                thumb_media_id = content  # filetransfer 直接返回 media_id 字符串
             elif isinstance(content, dict):
                 thumb_media_id = content.get("media_id", "")
             else:
                 thumb_media_id = up.get("media_id", "")
-            cover_cdn_url = up.get("cdn_url") or (content.get("cdn_url") if isinstance(content, dict) else "") or ""
+            cover_cdn_url = (
+                up.get("cdn_url")
+                or (content.get("cdn_url") if isinstance(content, dict) else "")
+                or ""
+            )
             if str(up.get("base_resp", {}).get("ret", 0)) != "0":
-                out["error"] = f"封面上传失败: {json.dumps(up, ensure_ascii=False)[:200]}"
-                print(json.dumps(out, ensure_ascii=False)); return 1
+                out["error"] = (
+                    f"封面上传失败: {json.dumps(up, ensure_ascii=False)[:200]}"
+                )
+                print(json.dumps(out, ensure_ascii=False))
+                return 1
             if not thumb_media_id:
-                out["error"] = f"封面上传失败: {json.dumps(up, ensure_ascii=False)[:200]}"
-                print(json.dumps(out, ensure_ascii=False)); return 1
+                out["error"] = (
+                    f"封面上传失败: {json.dumps(up, ensure_ascii=False)[:200]}"
+                )
+                print(json.dumps(out, ensure_ascii=False))
+                return 1
 
             # 1.5) 正文内嵌图片 → 同一 upload_material 接口，取响应 cdn_url 替换 src
             def _upload_content_img(path):
@@ -718,7 +846,9 @@ def cmd_publish(a):
                 mime = "image/png" if img.suffix.lower() == ".png" else "image/jpeg"
                 jj = _upload_material(img, mime)
                 c = jj.get("content")
-                url = jj.get("cdn_url") or (c.get("cdn_url") if isinstance(c, dict) else None)
+                url = jj.get("cdn_url") or (
+                    c.get("cdn_url") if isinstance(c, dict) else None
+                )
                 return url
 
             def _repl(m):
@@ -730,61 +860,118 @@ def cmd_publish(a):
                     return m.group(0)
                 url = _upload_content_img(local)
                 return m.group(0).replace(src, url) if url else m.group(0)
+
             html = re.sub(r'<img[^>]*\bsrc=["\']([^"\']+)["\']', _repl, html)
 
             # 2) operate_appmsg 建草稿
-            op_url = (f"https://mp.weixin.qq.com/cgi-bin/operate_appmsg?t=ajax-response&sub=create&type=10"
-                      f"&token={token}&lang=zh_CN&f=json&ajax=1")
+            op_url = (
+                f"https://mp.weixin.qq.com/cgi-bin/operate_appmsg?t=ajax-response&sub=create&type=10"
+                f"&token={token}&lang=zh_CN&f=json&ajax=1"
+            )
             form = {
-                "token": token, "lang": "zh_CN", "f": "json", "ajax": "1",
-                "random": str(_t.time())[-6:], "AppMsgId": "", "count": "1",
-                "data_seq": "0", "operate_from": "Chrome", "isnew": "1", "articlenum": "1",
-                "title0": title, "author0": author, "digest0": digest,
-                "content0": html, "sourceurl0": a.source_url or "",
-                "show_cover_pic0": "0", "thumb_media_id0": thumb_media_id,
-                "shortvideofileid0": "", "copyright_type0": "0", "fileid0": "",
-                "need_open_comment0": "0", "only_fans_can_comment0": "0",
+                "token": token,
+                "lang": "zh_CN",
+                "f": "json",
+                "ajax": "1",
+                "random": str(_t.time())[-6:],
+                "AppMsgId": "",
+                "count": "1",
+                "data_seq": "0",
+                "operate_from": "Chrome",
+                "isnew": "1",
+                "articlenum": "1",
+                "title0": title,
+                "author0": author,
+                "digest0": digest,
+                "content0": html,
+                "sourceurl0": a.source_url or "",
+                "show_cover_pic0": "0",
+                "thumb_media_id0": thumb_media_id,
+                "shortvideofileid0": "",
+                "copyright_type0": "0",
+                "fileid0": "",
+                "need_open_comment0": "0",
+                "only_fans_can_comment0": "0",
                 "can_reward0": "0",
             }
             # 新版编辑器封面不再只读 thumb_media_id0，还读 cdn_*_url0；没拿到 cdn_url 就不加（避免传空字符串覆盖）
             if cover_cdn_url:
-                form.update({
-                    "cdn_url0": cover_cdn_url, "cdn_235_1_url0": cover_cdn_url,
-                    "cdn_1_1_url0": cover_cdn_url, "cdn_16_9_url0": cover_cdn_url,
-                })
-            r2 = page.request.post(op_url, form=form,
-                                   headers={"Referer": page.url, "X-Requested-With": "XMLHttpRequest"})
+                form.update(
+                    {
+                        "cdn_url0": cover_cdn_url,
+                        "cdn_235_1_url0": cover_cdn_url,
+                        "cdn_1_1_url0": cover_cdn_url,
+                        "cdn_16_9_url0": cover_cdn_url,
+                    }
+                )
+            r2 = page.request.post(
+                op_url,
+                form=form,
+                headers={"Referer": page.url, "X-Requested-With": "XMLHttpRequest"},
+            )
             try:
                 res = r2.json()
             except Exception:
-                out["error"] = f"建草稿返回非JSON: {r2.text()[:200]}"; print(json.dumps(out, ensure_ascii=False)); return 1
+                out["error"] = f"建草稿返回非JSON: {r2.text()[:200]}"
+                print(json.dumps(out, ensure_ascii=False))
+                return 1
             ret = res.get("ret", res.get("base_resp", {}).get("ret", -1))
             if str(ret) == "0":
-                media_id = str(res.get("appMsgId") or res.get("appmsgid") or res.get("app_id") or "").strip()
+                media_id = str(
+                    res.get("appMsgId")
+                    or res.get("appmsgid")
+                    or res.get("app_id")
+                    or ""
+                ).strip()
                 if not media_id:
                     out["error"] = "建草稿成功但未返回草稿 ID"
-                    print(json.dumps(out, ensure_ascii=False)); return 1
+                    print(json.dumps(out, ensure_ascii=False))
+                    return 1
                 out["success"] = True
                 out["media_id"] = media_id
                 out["thumb_media_id"] = thumb_media_id
-                print(json.dumps(out, ensure_ascii=False)); return 0
-            out["error"] = f"建草稿失败 ret={ret}: {json.dumps(res, ensure_ascii=False)[:250]}"
-            print(json.dumps(out, ensure_ascii=False)); return 1
+                print(json.dumps(out, ensure_ascii=False))
+                return 0
+            out["error"] = (
+                f"建草稿失败 ret={ret}: {json.dumps(res, ensure_ascii=False)[:250]}"
+            )
+            print(json.dumps(out, ensure_ascii=False))
+            return 1
         finally:
             ctx.close()
 
 
 def cmd_selftest(_a=None):
-    raw = json.dumps({
-        "publish_page": json.dumps({
-            "total_count": 37, "publish_count": 0, "masssend_count": 12,
-            "publish_list": [{
-                "publish_info": json.dumps({
-                    "appmsgex": [{"title": "a", "link": "https://mp.weixin.qq.com/s/x", "read_num": 80, "like_num": 3}],
-                }, ensure_ascii=False),
-            }],
-        }, ensure_ascii=False),
-    }, ensure_ascii=False)
+    raw = json.dumps(
+        {
+            "publish_page": json.dumps(
+                {
+                    "total_count": 37,
+                    "publish_count": 0,
+                    "masssend_count": 12,
+                    "publish_list": [
+                        {
+                            "publish_info": json.dumps(
+                                {
+                                    "appmsgex": [
+                                        {
+                                            "title": "a",
+                                            "link": "https://mp.weixin.qq.com/s/x",
+                                            "read_num": 80,
+                                            "like_num": 3,
+                                        }
+                                    ],
+                                },
+                                ensure_ascii=False,
+                            ),
+                        }
+                    ],
+                },
+                ensure_ascii=False,
+            ),
+        },
+        ensure_ascii=False,
+    )
     result = dict(EMPTY)
     result["metrics"] = []
     _parse_publish(raw, result)
@@ -805,6 +992,7 @@ def cmd_selftest(_a=None):
 
 def cmd_whoami(a):
     from playwright.sync_api import sync_playwright
+
     out = {"loggedIn": False, "name": "", "avatar": ""}
     try:
         with sync_playwright() as p:
@@ -818,12 +1006,15 @@ def cmd_whoami(a):
                         out.update(loggedIn=True, **_account_identity(page))
                         if out["name"] and out["avatar"]:
                             break
-                    elif page.query_selector("img.login__type__container__scan__qrcode, img[src*='qrcode']"):
+                    elif page.query_selector(
+                        "img.login__type__container__scan__qrcode, img[src*='qrcode']"
+                    ):
                         break
                     page.wait_for_timeout(500)
                 out["loggedIn"] = bool(_extract_token(page.url))
                 if not out["loggedIn"] and not page.query_selector(
-                        "img.login__type__container__scan__qrcode, img[src*='qrcode']"):
+                    "img.login__type__container__scan__qrcode, img[src*='qrcode']"
+                ):
                     out["error"] = "公众号账号页面尚未就绪，请稍后重试"
             finally:
                 ctx.close()
@@ -843,23 +1034,28 @@ def main():
         x.add_argument("--no-proxy", action="store_true")
         x.add_argument("--headed", action="store_true")
 
-    lp = sub.add_parser("login"); common(lp)
-    lp.add_argument("--qr-out"); lp.add_argument("--status-file")
+    lp = sub.add_parser("login")
+    common(lp)
+    lp.add_argument("--qr-out")
+    lp.add_argument("--status-file")
     lp.add_argument("--timeout", type=int, default=240)
     lp.set_defaults(func=cmd_login)
 
-    sp = sub.add_parser("stats"); common(sp)
+    sp = sub.add_parser("stats")
+    common(sp)
     sp.add_argument("--count", type=int, default=20)
     sp.add_argument("--dump-dir", help="调试：把原始响应落盘")
     sp.set_defaults(func=cmd_stats)
 
-    wp = sub.add_parser("whoami"); common(wp)
+    wp = sub.add_parser("whoami")
+    common(wp)
     wp.set_defaults(func=cmd_whoami)
 
     tp = sub.add_parser("selftest")
     tp.set_defaults(func=cmd_selftest)
 
-    pp = sub.add_parser("publish"); common(pp)
+    pp = sub.add_parser("publish")
+    common(pp)
     pp.add_argument("--html", required=True, help="已排版的公众号 HTML 文件")
     pp.add_argument("--cover", required=True, help="封面图路径")
     pp.add_argument("--title", required=True)
@@ -870,7 +1066,8 @@ def main():
 
     a = ap.parse_args()
     if not getattr(a, "func", None):
-        ap.print_help(); return 1
+        ap.print_help()
+        return 1
     return a.func(a)
 
 

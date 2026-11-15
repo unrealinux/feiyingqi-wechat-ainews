@@ -25,6 +25,10 @@ python-dotenv>=1.0.0
 # Timezone database for zoneinfo (Windows ships no IANA tzdata)
 tzdata>=2024.1
 
+# 公众号后台数据回采（可选，scripts/fetch_mp_stats.py）
+# 只取阅读/粉丝数时需要；装完还要 `playwright install chromium`（约 130MB）
+# playwright>=1.40.0
+
 # Testing
 pytest>=7.0.0
 

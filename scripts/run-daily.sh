@@ -15,6 +15,17 @@ exec >> logs/daily.log 2>&1
 PY=".venv/bin/python"
 LEDGER="logs/drafts_created.jsonl"
 
+# 回采公众号数据（粉丝/阅读/分享 → logs/wechat_stats.jsonl）。
+# best effort：会话过期或网络失败都不改本次退出码；跳过出稿的日子也照样采。
+collect_stats() {
+    [ -f scripts/fetch_mp_stats.py ] || return 0
+    if "$PY" scripts/fetch_mp_stats.py >> logs/stats.log 2>&1; then
+        echo "== $(date '+%F %T') 数据回采完成"
+    else
+        echo "== $(date '+%F %T') 数据回采失败（不影响出稿，见 logs/stats.log）"
+    fi
+}
+
 if [ ! -f config.yaml ] || [ ! -f .env ]; then
     echo "== $(date '+%F %T') 跳过：缺 config.yaml 或 .env（微信凭据 / LLM key）"
     exit 1
@@ -33,6 +44,7 @@ fi
 
 if [ "$done_today" -ge "$max" ]; then
     echo "== $(date '+%F %T') 跳过：今天已产出 $done_today 篇（上限 $max）"
+    collect_stats
     exit 0
 fi
 
@@ -54,4 +66,6 @@ fi
 
 rc=$?
 echo "== $(date '+%F %T') 结束 rc=$rc"
+
+collect_stats
 exit "$rc"
