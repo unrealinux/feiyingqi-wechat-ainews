@@ -444,6 +444,14 @@ def cmd_stats(a):
                 if cap["publish"]:
                     break
                 page.wait_for_timeout(1000)
+            if not cap["publish"]:
+                # Vue 有时不自己发这条 XHR（实测：页面到了、请求没到），
+                # 同源里自己 fetch 一次即可，参数比手拼签名简单：sub/begin/count/f=json/ajax=1
+                cap["publish"] = _fetch_json_in_page(
+                    page,
+                    f"https://mp.weixin.qq.com/cgi-bin/appmsgpublish?sub=list&begin=0"
+                    f"&count={a.count}&f=json&ajax=1&token={token}&lang=zh_CN",
+                )
             # 打开数据分析页，触发阅读/分享趋势 + 单篇文章数据 + 用户数据 XHR
             try:
                 page.goto(
@@ -486,6 +494,21 @@ def _deep_find(obj, keys, out):
             _deep_find(x, keys, out)
 
 
+def _fetch_json_in_page(page, url: str):
+    """在已登录的页面上下文里 fetch 一个 JSON 接口，返回响应文本；失败返回 None。
+
+    比在 Python 侧重放请求可靠：cookie、Referer、fingerprint 都由浏览器带。
+    """
+    js = (
+        "async (u) => { const r = await fetch(u, {credentials:'include'});"
+        " return r.ok ? await r.text() : ''; }"
+    )
+    try:
+        return page.evaluate(js, url) or None
+    except Exception:
+        return None
+
+
 def _parse_publish(raw, result):
     """解析 appmsgpublish 数据 XHR 的 JSON → notes[] / posts / metrics。
     结构：外层 JSON.publish_page 是转义 JSON 字符串，内含 total_count/publish_count/
@@ -504,7 +527,9 @@ def _parse_publish(raw, result):
         total = int(page.get("total_count", 0) or 0)
         pub_cnt = int(page.get("publish_count", 0) or 0)
         mass_cnt = int(page.get("masssend_count", 0) or 0)
-        notes, total_read, like_sum = [], 0, 0
+        # 同一篇文章在发表记录里会出现两条（发布记录 + 群发记录，URL 与数字都不同），
+        # 按标题去重，留阅读数高的那条，否则列表看起来每篇都是双份。
+        dedup, total_read, like_sum = {}, 0, 0
         for it in page.get("publish_list") or []:
             info = it.get("publish_info")
             info = json.loads(info) if isinstance(info, str) else (info or {})
@@ -523,14 +548,19 @@ def _parse_publish(raw, result):
                 ln = int(am.get("like_num", 0) or 0)
                 total_read += rn
                 like_sum += ln
-                notes.append(
-                    {
-                        "title": am.get("title", ""),
-                        "url": am.get("link") or am.get("content_url", ""),
-                        "cover": am.get("cover", ""),
-                        "stat": (f"阅读 {rn} · 赞 {ln}" if rn or ln else ""),
-                    }
-                )
+                title = am.get("title", "")
+                prev = dedup.get(title)
+                if prev is None or rn > prev[0]:
+                    dedup[title] = (
+                        rn,
+                        {
+                            "title": title,
+                            "url": am.get("link") or am.get("content_url", ""),
+                            "cover": am.get("cover", ""),
+                            "stat": (f"阅读 {rn} · 赞 {ln}" if rn or ln else ""),
+                        },
+                    )
+        notes = [n for _, n in dedup.values()]
         result["notes"] = notes[:20]
         published = pub_cnt or total or len(notes)
         result["posts"] = published
@@ -612,7 +642,7 @@ def _parse_analytics(cap, result):
                     }
                 )
             for n in result.get("notes", []):
-                if n.get("title") in by_title:
+                if n.get("title") in by_title and not n.get("stat"):
                     n["stat"] = by_title[n["title"]]
             if not result.get("notes"):
                 result["notes"] = extras[:20]

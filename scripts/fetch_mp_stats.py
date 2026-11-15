@@ -49,8 +49,14 @@ def summarize(data: dict) -> dict:
     period = data.get("period_metrics") or {}
     week = {m["label"]: m["value"] for m in period.get("week") or []}
     month = {m["label"]: m["value"] for m in period.get("month") or []}
+    # url/cover 一起存：只留标题+数字的话，事后没法点回文章核对
     notes = [
-        {"title": n.get("title", "")[:40], "stat": n.get("stat", "")}
+        {
+            "title": n.get("title", "")[:40],
+            "stat": n.get("stat", ""),
+            "url": n.get("url", ""),
+            "cover": n.get("cover", ""),
+        }
         for n in (data.get("notes") or [])[:10]
     ]
     return {
