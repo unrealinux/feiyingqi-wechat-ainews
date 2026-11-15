@@ -125,16 +125,21 @@ def _read_jsonl(path: Path) -> List[Dict]:
     return rows
 
 
-def record_alert(reason: str) -> None:
-    """本地告警底账：webhook 没配时，这是唯一能事后查到"今天为什么没稿"的地方。"""
+def record_alert(reason: str, kind: str = "run_failed") -> None:
+    """本地告警底账：webhook 没配时，这是唯一能事后查到"今天为什么没稿"的地方。
+
+    kind 用来分桶统计（scripts/alert_stats.py）：闸门拦稿、IP 白名单、LLM 挂掉
+    是三种完全不同的事，混在一个 reason 字符串里就没法看频率。
+    """
     _append_jsonl(
         ALERT_LOG,
         {
             "time": datetime.now().isoformat(timespec="seconds"),
+            "kind": kind,
             "reason": reason[:500],
         },
     )
-    logger.error(f"[ALERT] 今日未产出：{reason}")
+    logger.error(f"[ALERT:{kind}] 今日未产出：{reason}")
 
 
 class NotificationChannel(ABC):

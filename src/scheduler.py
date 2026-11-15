@@ -45,7 +45,25 @@ def _refetch_more(current: list, limit: int = 30) -> list:
     return merged[:limit]
 
 
-def _notify_failure(reason: str) -> None:
+def failure_kind(reason: str) -> str:
+    """按失败原因分桶：闸门拦稿和"网络挂了"要能分开统计。"""
+    text = str(reason)
+    if "工具级变化" in text:
+        return "gate_no_tool_change"
+    if "标题不合格" in text:
+        return "gate_title"
+    if "可复制块" in text:
+        return "gate_no_copyable"
+    if "AI 味" in text:
+        return "ai_tone"
+    if "invalid ip" in text or "白名单" in text:
+        return "wechat_ip"
+    if "LLM" in text or "API Key" in text:
+        return "llm_unavailable"
+    return "run_failed"
+
+
+def _notify_failure(reason: str, kind: str = "") -> None:
     """失败要有声音。定时任务跑在后台，日志没人看；
 
     AI 味门禁/LLM 失败都会让当天"没稿"，不说一声就和网络挂掉分不出来。
@@ -55,7 +73,7 @@ def _notify_failure(reason: str) -> None:
         from src.monitoring import record_alert, send_run_notification
 
         send_run_notification("error", {"error": reason})
-        record_alert(reason)
+        record_alert(reason, kind=kind or failure_kind(reason))
     except Exception as e:
         logger.warning(f"失败通知发送失败（不影响主流程）: {e}")
 
