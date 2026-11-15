@@ -310,6 +310,7 @@ class Summarizer:
         news_items: List[NewsItem],
         allow_mock: bool = False,
         extra_instruction: str = "",
+        require_tool_change: bool = False,
     ) -> dict:
         """生成「深读」结构化内容（供 src/editorial_template 渲染固定排版）。
 
@@ -319,6 +320,9 @@ class Summarizer:
         Args:
             extra_instruction: 追回到 user prompt 的额外约束。用于非常规素材源，
                 比如“蓝皮书是社区整理的，出处要写清、界面/价格以官方为准”。
+            require_tool_change: 新闻素材专用闸门。素材里没有“工具级变化”就
+                抛 ThinMaterialError（宁缺毋滥，见 src/editorial_rules.py）。
+                产品手册类素材（WorkBuddy/豆包）本身即工具级，保持 False。
         """
         from src.ai_score import check_ai_score, DEFAULT_THRESHOLD
         from src.monitoring import record_ai_score
@@ -338,6 +342,21 @@ class Summarizer:
         if not self.client or not news_items:
             raise LLMUnavailableError(
                 "LLM 客户端不可用（未配置 API Key 或 openai 库缺失），拒绝生成内容"
+            )
+
+        from src.editorial_rules import (
+            TITLE_MAX,
+            TITLE_MIN,
+            has_copyable_block,
+            has_tool_level_change,
+            title_problems,
+        )
+
+        if require_tool_change and not has_tool_level_change(news_items):
+            # 2026-11-16 回采：泛趋势选题（"三款模型…""这周换了三件事"）阅读 0–6，
+            # 而"具体工具 + 具体变化"能做到 70–108。素材没有硬落点就不写。
+            raise ThinMaterialError(
+                "素材里没有工具级变化（版本/定价/额度/权限/用法），本次不写趋势稿"
             )
 
         news_content = self._prepare_news_content(news_items)
@@ -367,6 +386,11 @@ JSON 结构如下：
 7. closing 用两段收束，给出作者视角的判断，不发散情绪；全文观点必须一致，不得出现与主线相矛盾的表述（例如一边论证算力受限，一边又说“算力过剩”）。
 8. 英文专有名词按本义翻译：mouse=小鼠（**不是鼠标**）、model=模型、agent=智能体；不确定的译名宁可用英文原名。
 9. 全文中文，总长约 2500～3500 字；段落可用 **加粗** 强调关键词。
+10. title 必须同时满足：含**具体工具/产品名**（Cursor / WorkBuddy / ChatGPT / 豆包…）、
+    含**动作或变化词**（怎么 / 接入 / 更新 / 涨 / 停 / 避坑…）、长度 {TITLE_MIN}–{TITLE_MAX} 字。
+    反面例子：“AI工具这周换了三件事”“三款新模型把多模态推到哪一步”（没人有落点）。
+11. 至少一个**可复制块**：steps 块，或 ≥3 条的 bullets 清单。读者要能把某段直接抄走用
+    —— 这是唯一能带来分享的东西（本号 54 篇里只有 5 篇有分享，其余全 0）。
 
 今日 AI 新闻素材：
 
@@ -413,6 +437,14 @@ JSON 结构如下：
 
                 normalize_meta_date(spec)
                 validate_spec(spec)
+
+                problems = title_problems(spec.get("title", ""))
+                if problems:
+                    raise EditorialSpecError("标题不合格：" + "；".join(problems))
+                if not has_copyable_block(spec):
+                    raise EditorialSpecError(
+                        "缺少可复制块：至少要一个 steps 块或 ≥3 条清单，读者才能照抄"
+                    )
 
                 ungrounded = find_ungrounded_numbers(spec, news_content)
                 if ungrounded:

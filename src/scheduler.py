@@ -198,7 +198,9 @@ def run_once() -> bool:
         summarizer = Summarizer()
         for material_attempt in (1, 2):
             try:
-                spec = summarizer.generate_editorial_spec(news_items, allow_mock=False)
+                spec = summarizer.generate_editorial_spec(
+                    news_items, allow_mock=False, require_tool_change=True
+                )
                 break
             except ThinMaterialError as e:
                 if material_attempt == 2:

@@ -22,14 +22,21 @@ HUMAN = (
 def _spec(paragraph: str) -> dict:
     return {
         "meta_line": "2026年1月1日 ｜ 测试",
-        "title": "测试标题",
+        # 标题/可复制块现在是硬约束（src/editorial_rules.py），夹具要过闸门
+        "title": "Cursor 更新后怎么接回本地工作流",
         "subtitle": "副标题",
         "lead": [paragraph, paragraph],
         "sections": [
             {"heading": "第一节", "accent": "red",
              "blocks": [{"type": "p", "text": paragraph}, {"type": "p", "text": paragraph}]},
             {"heading": "第二节", "accent": "green", "blocks": [{"type": "p", "text": paragraph}]},
-            {"heading": "第三节", "accent": "red", "blocks": [{"type": "p", "text": paragraph}]},
+            {"heading": "第三节", "accent": "red", "blocks": [
+                {"type": "steps", "items": [
+                    {"title": "打开设置 → 模型", "detail": "填自己的 key"},
+                    {"title": "跑一个空任务", "detail": "看是否报错"},
+                    {"title": "再跑正式任务", "detail": "对比耗时"},
+                ]},
+            ]},
         ],
         "closing": [paragraph, paragraph],
         "sources": ["1. 机构《标题》 https://example.com/a",

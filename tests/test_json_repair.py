@@ -49,11 +49,11 @@ class _RawClient:
 
 
 GOOD_SPEC = (
-    '{"meta_line":"2026年1月1日 ｜ 测试","title":"测试标题","subtitle":"副标题",'
+    '{"meta_line":"2026年1月1日 ｜ 测试","title":"Cursor 更新后怎么接回本地工作流","subtitle":"副标题",'
     '"lead":["上午 10 点我把同一个问题问了两遍。答案不一样。","第一遍说 3 天，第二遍说一周。"],'
     '"sections":[{"heading":"第一节","accent":"red","blocks":[{"type":"p","text":"就这一处。"}]},'
     '{"heading":"第二节","accent":"green","blocks":[{"type":"p","text":"改完再跑。"}]},'
-    '{"heading":"第三节","accent":"red","blocks":[{"type":"p","text":"答案对上了。"}]}],'
+    '{"heading":"第三节","accent":"red","blocks":[{"type":"steps","items":[{"title":"打开设置","detail":"填 key"},{"title":"跑空任务","detail":"看报错"},{"title":"跑正式任务","detail":"对比耗时"}]}]}],'
     '"closing":["差别在哪？","我把两段输出并排贴出来。"],'
     '"sources":["1. 机构《标题》 https://example.com/a","2. 机构《标题》 https://example.com/b"]}'
 )
@@ -70,7 +70,7 @@ def test_bad_json_gets_the_parse_error_as_feedback(monkeypatch):
         allow_mock=False,
     )
 
-    assert spec["title"] == "测试标题"
+    assert spec["title"] == "Cursor 更新后怎么接回本地工作流"
     assert len(summarizer.client.prompts) == 2
     assert "不是合法 JSON" in summarizer.client.prompts[1]
 
