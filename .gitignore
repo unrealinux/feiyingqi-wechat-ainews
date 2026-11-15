@@ -89,3 +89,7 @@ Thumbs.db
 
 # 贴图号生成的成图（产物，不入库）
 output/tietu/
+
+# 公众号后台扫码会话（管理员级凭据）与登录二维码，绝不进仓库
+output/_login/WeixinMpProfile/
+output/_login/wechat-qr.png
