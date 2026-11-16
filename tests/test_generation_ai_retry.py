@@ -180,3 +180,29 @@ def test_rate_limit_is_retried_like_a_transport_error(summarizer, monkeypatch):
         summarizer.generate_editorial_spec(_news(), allow_mock=False)
 
     assert summarizer.client.calls == 3
+
+
+def test_title_rejection_feeds_back_candidate_tool_names():
+    """标题被打回时，第二次 prompt 必须给出"能用哪些工具名"。
+
+    2026-11-16 08:00 定时任务两次都死在标题上（先"没有工具名"、再"没有动作词"），
+    因为第一次打回只说了"不合格"，没说能用什么。
+    """
+    bad = _spec(HUMAN)
+    bad["title"] = "AI 工具这周换了三件事"          # 无工具名、无动作词
+    client = FakeClient([bad, bad])
+    summarizer = Summarizer()
+    summarizer.client = client
+    items = [
+        NewsItem("Cursor 更新了服务器部署", "https://example.com/a", "s",
+                 "Cursor 把服务器搬进编辑器，v2 版本上线"),
+    ]
+
+    with pytest.raises(LLMUnavailableError) as err:
+        summarizer.generate_editorial_spec(items, allow_mock=False)
+
+    assert "标题不合格" in str(err.value)
+    assert "AI 工具这周换了三件事" in str(err.value), "错误里要带上被拒的标题"
+    second_prompt = client.prompts[1]
+    assert "Cursor" in second_prompt, "重写提示要给出素材里的具体工具名"
+    assert "动作" in second_prompt

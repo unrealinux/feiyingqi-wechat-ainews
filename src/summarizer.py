@@ -347,6 +347,7 @@ class Summarizer:
         from src.editorial_rules import (
             TITLE_MAX,
             TITLE_MIN,
+            candidate_tools,
             has_copyable_block,
             has_tool_level_change,
             title_problems,
@@ -387,7 +388,7 @@ JSON 结构如下：
 8. 英文专有名词按本义翻译：mouse=小鼠（**不是鼠标**）、model=模型、agent=智能体；不确定的译名宁可用英文原名。
 9. 全文中文，总长约 2500～3500 字；段落可用 **加粗** 强调关键词。
 10. title 必须同时满足：含**具体工具/产品名**（Cursor / WorkBuddy / ChatGPT / 豆包…）、
-    含**动作或变化词**（怎么 / 接入 / 更新 / 涨 / 停 / 避坑…）、长度 {TITLE_MIN}–{TITLE_MAX} 字。
+    不准是泛趋势/日报腔（这周 / 三款 / 盘点 / 趋势），长度 {TITLE_MIN}–{TITLE_MAX} 字。
     反面例子：“AI工具这周换了三件事”“三款新模型把多模态推到哪一步”（没人有落点）。
 11. 至少一个**可复制块**：steps 块，或 ≥3 条的 bullets 清单。读者要能把某段直接抄走用
     —— 这是唯一能带来分享的东西（本号 54 篇里只有 5 篇有分享，其余全 0）。
@@ -440,7 +441,9 @@ JSON 结构如下：
 
                 problems = title_problems(spec.get("title", ""))
                 if problems:
-                    raise EditorialSpecError("标题不合格：" + "；".join(problems))
+                    raise EditorialSpecError(
+                        f"标题不合格（{spec.get('title', '')}）：" + "；".join(problems)
+                    )
                 if not has_copyable_block(spec):
                     raise EditorialSpecError(
                         "缺少可复制块：至少要一个 steps 块或 ≥3 条清单，读者才能照抄"
@@ -495,6 +498,25 @@ JSON 结构如下：
                 logger.warning(f"结构化内容第 {attempt} 次生成失败: {e}")
                 # JSON 不合法要告诉模型错在哪，否则它只会照着原样再错一遍
                 # （2026-10-28 16:00 定时任务连续两次都死在 JSON 解析）。
+                if "标题不合格" in str(e):
+                    # 2026-11-16 08:00 定时任务就是两次都死在标题上：第一次"没有工具名"、
+                    # 第二次"没有动作词"。原因是没有把"能用哪些工具名"告诉模型。
+                    tools = (
+                        "、".join(candidate_tools(news_items)) or "素材里出现的具体产品"
+                    )
+                    ai_feedback = (
+                        f"\n\n上一稿标题不合格（{e}）。重写标题时："
+                        f"① 标题里必须出现一个具体工具/产品名，可用：{tools}；"
+                        f"② 不准写泛趋势/日报腔（这周 / 三款 / 盘点 / 趋势 / 展望…），要落到具体变化；"
+                        f"③ 长度 {TITLE_MIN}–{TITLE_MAX} 字，不要用「三款模型」「这周」「趋势」这类泛化说法。"
+                        "正文内容可以基本沿用上一稿，只改标题与受影响的副标题/开头。"
+                    )
+                if "缺少可复制块" in str(e):
+                    ai_feedback = (
+                        f"\n\n上一稿缺少可复制块（{e}）。"
+                        "补一个 steps 块（items 为 [{title, detail}]，title 写动作、detail 写点哪里/填什么/会看到什么），"
+                        "或补一节 ≥3 条的 bullets 清单，让读者能直接抄走。"
+                    )
                 if "JSON 解析失败" in str(e):
                     ai_feedback = (
                         "\n\n上一稿不是合法 JSON（" + str(e) + "）。"

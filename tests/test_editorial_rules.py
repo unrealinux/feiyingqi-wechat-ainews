@@ -27,15 +27,26 @@ class TestTitleRules:
             assert title_problems(title) == [], title
 
     def test_trend_roundups_are_rejected(self):
-        """底部那批：泛趋势、三款并列、说教式，没有落点。"""
-        for title, must_mention in (
-            ("AI工具这周换了三件事", "具体工具"),
-            ("三款新模型把多模态推到哪一步", "具体工具"),
-            ("模型不再只拼分数", "动作"),
+        """底部那批：泛趋势、三款并列、说教式，没有落点。
+
+        拦截依据分两种：日报腔（这周/三款）与新「没有具体工具名」；
+        只要命中其中一条就算拦下，不要求两条同时命中。
+        """
+        for title in (
+            "AI工具这周换了三件事",          # 这周 → 日报腔
+            "三款新模型把多模态推到哪一步",   # 三款 → 泛化
+            "模型不再只拼分数",              # 没有具体工具名
         ):
-            problems = title_problems(title)
-            assert problems, f"应当被拒: {title}"
-            assert any(must_mention in p for p in problems), (title, problems)
+            assert title_problems(title), f"应当被拒: {title}"
+
+    def test_real_news_titles_with_odd_verbs_pass(self):
+        """真实标题的动词很发散，不能被动作词白名单误杀（11-16 08:00 的教训）。"""
+        for title in (
+            "DeepSeek 开始限额，GPT-6.2 却延期",
+            "Cursor 把服务器搬进了编辑器",
+            "通义千问把免费额度砍到每天 50 次",
+        ):
+            assert title_problems(title) == [], title
 
     def test_length_bounds(self):
         assert not any("长度" in p for p in title_problems("Cursor 更新后怎么接回本地工作流"))

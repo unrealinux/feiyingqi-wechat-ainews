@@ -24,12 +24,22 @@ TOOL_CHANGE_RE = re.compile(
     r"API|接口|插件|SDK|CLI|功能|入口|合并|拆分|改名|关停|剥离|收费|订阅|套餐|席位",
 )
 
-# 动作/变化词：标题里得有一个，读者才知道"这篇能拿来干什么"
+# 动作/变化词：软指标，只在把打回原因写给人看时用（不单独做硬性拦截）。
+# 早期版本要求"标题必须含动作词"，结果 2026-11-16 把
+# 「DeepSeek 限额、GPT-6.2 延期」这种完全正常的标题也拦了两次——真实标题的动词
+# 太发散（延期/限额/翻倍/改名…），白名单列不完，硬卡只会误杀。
 ACTION_RE = re.compile(
     r"怎么|如何|为什么|能不能|要不要|上手|接入|配置|设置|迁移|替换|避坑|踩坑|跑通|闭环|"
     r"实操|实战|教程|指南|清单|步骤|流程|修复|救回|省下|砍掉|砍半|翻倍|反超|掉队|翻车|"
-    r"凉|停|涨|降|免费|收费|放开|限制|接管|吞|抢|断|崩|漏|不及格|翻新|重写|重做|"
-    r"跑|装|测|试|换|接回|搬|迁",
+    r"凉|停|涨|降|免费|收费|放开|限制|限额|延期|推迟|提前|下线|关停|合并|改名|接管|吞|抢|"
+    r"断|崩|漏|不及格|翻新|重写|重做|跑|装|测|试|换|接回|搬|迁|发布|上线|开源|开源|收费",
+)
+
+# 泛趋势/日报腔：数据上最差的一类（阅读 0–6），直接拦。
+# 依据：54 篇里"三款模型…""AI工具这周换了三件事"这类标题阅读都在个位数。
+ROUNDUP_RE = re.compile(
+    r"日报|速递|盘点|综述|这周|本周|一周|近期|三款|三个|五种|多项|大厂|趋势|展望|研判|"
+    r"观察|浅谈|漫谈|生态|格局|上半场|下半场|未来已来|可以预见",
 )
 
 # 常见具体产品名（命中即视为"有工具"）；不在表里的英文专名也认（正则兜底）
@@ -110,7 +120,15 @@ def _has_tool_name(title: str) -> bool:
 
 
 def title_problems(title: str) -> List[str]:
-    """返回标题的问题列表；空列表 = 合格。"""
+    """返回标题的问题列表；空列表 = 合格。
+
+    硬条件只有两条（都能从 54 篇数据里指出来源）：
+      · 必须有具体工具/产品名（含工具词中位 35 vs 不含 11）
+      · 不能是泛趋势/日报腔（这批阅读 0–6）
+    另外长度卡 14–30（本号 105 阅读那篇是 18 字，21–28 会误杀）。
+    动作词只作提示，不单独拦截——真实标题的动词太发散，硬卡会误杀正常标题
+    （2026-11-16 08:00 就因为这条连拦两稿）。
+    """
     t = (title or "").strip()
     problems = []
     if not t:
@@ -119,9 +137,24 @@ def title_problems(title: str) -> List[str]:
         problems.append(f"长度 {len(t)} 字，要求 {TITLE_MIN}–{TITLE_MAX}")
     if not _has_tool_name(t):
         problems.append("没有具体工具/产品名")
-    if not ACTION_RE.search(t):
-        problems.append("没有动作或变化词（怎么/接入/更新/涨/停…）")
+    hit = ROUNDUP_RE.search(t)
+    if hit:
+        problems.append(f"泛趋势/日报腔（「{hit.group(0)}」），读者没有落点")
     return problems
+
+
+def candidate_tools(items, limit: int = 6) -> List[str]:
+    """从素材里挑出可以写进标题的具体工具/产品名（给重写提示用，不引入素材外的东西）。"""
+    found: List[str] = []
+    for item in items or []:
+        text = f"{getattr(item, 'title', '')} {getattr(item, 'description', '')}"
+        for name in KNOWN_TOOLS:
+            if name in text and name not in found:
+                found.append(name)
+        for token in _LATIN_NAME_RE.findall(text):
+            if token not in found and not token.isdigit():
+                found.append(token)
+    return found[:limit]
 
 
 def has_copyable_block(spec: dict) -> bool:
