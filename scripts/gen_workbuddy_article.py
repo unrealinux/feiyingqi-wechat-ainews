@@ -592,6 +592,8 @@ def run_daily(
             footer=spec["footer"],
             variant="steps",
             steps_label=preset["cover_label"],
+            # 封面配色跟素材源走：豆包那套是白底黑字蓝点缀，不能沿用蓝皮书的荧光绿
+            theme=material,
         )
     except Exception as e:
         print(f"封面生成失败，用兜底封面: {e}")

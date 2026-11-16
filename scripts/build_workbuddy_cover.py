@@ -20,7 +20,28 @@ from PIL import Image, ImageDraw  # noqa: E402
 W, H = 1440, 810
 THUMB_RATIO = 2.35  # 微信列表缩略图比例：关键信息要落在中间这条带里
 
-BG = (216, 241, 75)  # 蓝皮书品牌荧光绿
+BG = (216, 241, 75)  # WorkBuddy 蓝皮书的荧光绿（默认）
+
+# 两套素材的品牌观感差很远，封面不能都穿同一件衣服：
+#   workbuddy  荧光绿底 + 黑字（照《WorkBuddy 实战蓝皮书》banner）
+#   doubaowork 白底 + 近黑字 + 蓝点缀（照 doubaowork.homes 的 og 图：纯白底、
+#              超粗黑标题、左上小蓝标、灰色 meta 行），所以底/字/卡片色都要换
+PALETTES = {
+    "workbuddy": {
+        "bg": (216, 241, 75),
+        "ink": (16, 16, 16),
+        "tile": (255, 255, 255),
+        "num": (216, 241, 75),
+        "mark": "WB_",
+    },
+    "doubaowork": {
+        "bg": (255, 255, 255),
+        "ink": (14, 17, 22),
+        "tile": (238, 243, 252),
+        "num": (47, 128, 255),
+        "mark": "DB_",
+    },
+}
 
 # —— 文案：换文章时改这里就行（要和正文主题对得上，别写泛泛的“怎么用”）——
 KICKER = "WorkBuddy · 社区蓝皮书 · 10 章实操 · 2026"
@@ -104,7 +125,12 @@ def build(
     footer=None,
     variant="flow",
     steps_label=None,
+    theme="workbuddy",
 ):
+    global BG, INK, TILE
+    palette = PALETTES.get(theme, PALETTES["workbuddy"])
+    BG, INK, TILE = palette["bg"], palette["ink"], palette["tile"]
+
     img = Image.new("RGB", (W, H), BG)
     d = ImageDraw.Draw(img)
 
@@ -146,7 +172,12 @@ def build(
         for i, icon in enumerate(icons):
             x = start_x + i * (size + gap)
             tile(d, x, cy, size, icon, scale=8)
-            d.text((x + size - 30, cy + size - 26), f"0{i + 1}", font=font(20), fill=BG)
+            d.text(
+                (x + size - 30, cy + size - 26),
+                f"0{i + 1}",
+                font=font(20),
+                fill=palette["num"],
+            )
         d.text(
             (start_x, cy + size + 26),
             steps_label,
@@ -174,7 +205,9 @@ def build(
     # 底部黑条
     d.rectangle([0, H - 96, W, H], fill=INK)
     d.text((84, H - 72), footer, font=font(32, bold=False), fill=BG)
-    draw_tracked(d, (W - 190, H - 66), "WB_", font(30, bold=False), BG, tracking=2)
+    draw_tracked(
+        d, (W - 190, H - 66), palette["mark"], font(30, bold=False), BG, tracking=2
+    )
 
     img.save(out_path, quality=93)
 

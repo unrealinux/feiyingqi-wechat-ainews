@@ -107,3 +107,34 @@ class TestFontLookup:
             steps_label="一 → 二 → 三",
         )
         assert out.exists() and out.stat().st_size > 5000
+
+
+class TestCoverTheme:
+    """封面配色必须跟素材源走：豆包那套是白底，WorkBuddy 是荧光绿。"""
+
+    def _build(self, tmp_path, theme):
+        import sys
+        from pathlib import Path
+
+        sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
+        from build_workbuddy_cover import build
+
+        out = tmp_path / f"{theme}.jpg"
+        build(
+            str(out),
+            title_lines=["第一行", "第二行"],
+            kicker="k", subtitle="s", footer="f",
+            variant="steps", steps_label="一 → 二", theme=theme,
+        )
+        return out
+
+    def test_palettes_differ(self, tmp_path):
+        from PIL import Image
+
+        wb = Image.open(self._build(tmp_path, "workbuddy")).convert("RGB")
+        db = Image.open(self._build(tmp_path, "doubaowork")).convert("RGB")
+        assert wb.getpixel((10, 10)) != db.getpixel((10, 10))
+        assert db.getpixel((10, 10)) == (255, 255, 255), "豆包封面应是白底"
+
+    def test_unknown_theme_falls_back(self, tmp_path):
+        assert self._build(tmp_path, "nope").exists()
