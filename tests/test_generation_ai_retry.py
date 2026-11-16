@@ -205,4 +205,4 @@ def test_title_rejection_feeds_back_candidate_tool_names():
     assert "AI 工具这周换了三件事" in str(err.value), "错误里要带上被拒的标题"
     second_prompt = client.prompts[1]
     assert "Cursor" in second_prompt, "重写提示要给出素材里的具体工具名"
-    assert "动作" in second_prompt
+    assert "泛趋势" in second_prompt, "重写提示要说明准不准写日报腔"
