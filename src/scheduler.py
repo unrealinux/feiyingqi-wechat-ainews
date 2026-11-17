@@ -205,12 +205,12 @@ def run_once() -> bool:
 
         # IP 白名单经常变（家用宽带），token 拿不到就没法建草稿：
         # 先验一次，省掉一次注定白跑的 LLM 调用，也给出能对上号的告警分类。
-        from src.publisher import WeChatPublisher
+        # 失败时把微信原文（含当前出口 IP）带进告警，事后能统计 IP 漂移频率。
+        from src.netinfo import probe_token
 
-        if not WeChatPublisher().get_access_token():
-            raise RuntimeError(
-                "获取 access_token 失败（多半是出口 IP 不在白名单，见上文 invalid ip）"
-            )
+        _token, token_err = probe_token()
+        if not _token:
+            raise RuntimeError(f"获取 access_token 失败: {token_err}")
 
         logger.info("\n[1/4] Fetching latest AI news...")
         news_items = fetch_news()

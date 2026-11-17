@@ -48,3 +48,41 @@ class TestRecordAlert:
             monitoring.ALERT_LOG.read_text(encoding="utf-8").strip().splitlines()[-1]
         )
         assert record["kind"] == "run_failed"
+
+
+class TestEgressIpRecording:
+    """IP 漂移要能从告警底账里看出来：白名单拒绝时把当前出口 IP 记进去。"""
+
+    def test_extract_ip_from_wechat_error(self):
+        from src.netinfo import extract_ip
+
+        msg = (
+            "获取 access_token 失败: invalid ip 183.202.137.105 "
+            "ipv6 ::ffff:183.202.137.105, not in whitelist rid: 6af653ac"
+        )
+        assert extract_ip(msg) == "183.202.137.105"
+        assert extract_ip("没有 IP 的消息") == ""
+
+    def test_preflight_blocks_run_and_records_ip(self):
+        """token 探不通时：不出稿、不花 LLM 的钱，告警里带 IP。"""
+        from unittest.mock import patch
+
+        from src.scheduler import run_once
+
+        err = "invalid ip 1.2.3.4 ipv6 ::ffff:1.2.3.4, not in whitelist"
+        with patch("src.publisher.count_drafts_created_today", return_value=0), \
+             patch("src.config.load_config", return_value={"scheduler": {}}), \
+             patch("src.netinfo.probe_token", return_value=(None, err)), \
+             patch("src.fetcher.fetch_news") as m_fetch, \
+             patch("src.publisher.publish_article") as m_publish, \
+             patch("src.monitoring.send_run_notification") as m_notify:
+            result = run_once()
+
+        assert result is False
+        self_fetch_called = m_fetch.called
+        assert not self_fetch_called, "token 都拿不到，不该再抓素材"
+        assert not m_publish.called
+        status, details = m_notify.call_args.args
+        assert status == "error"
+        assert "1.2.3.4" in details["error"]
+        assert failure_kind(details["error"]) == "wechat_ip"
