@@ -451,7 +451,13 @@ JSON 结构如下：
                 normalize_meta_date(spec)
                 validate_spec(spec)
 
-                problems = title_problems(spec.get("title", ""))
+                # 最后一次机会放宽"必须有工具名"（仍拦日报腔）：
+                # 2026-11-17 08:00 两次被这条拦死（「算力翻5倍也白搭：量子位湿实验基准给 AI 选型划了条线」），
+                # 代价是一整天没有文章，收益却只是一个更具体的标题。
+                is_last_attempt = attempt >= max_attempts
+                problems = title_problems(
+                    spec.get("title", ""), strict=not is_last_attempt
+                )
                 if problems:
                     raise EditorialSpecError(
                         f"标题不合格（{spec.get('title', '')}）：" + "；".join(problems)

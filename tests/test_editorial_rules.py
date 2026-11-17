@@ -95,3 +95,23 @@ class TestCopyableBlock:
             self._spec([{"type": "p", "text": "只有一段观点。"},
                         {"type": "bullets", "items": ["只有一条"]}])
         )
+
+
+def test_company_names_count_as_tool_names():
+    """公司名也算"具体对象"：2026-11-17 「联想把词元工厂…」被当成没有工具名拒过。"""
+    assert "没有具体工具/产品名" not in title_problems(
+        "联想把词元工厂搬进了你的电脑"
+    )
+    assert "没有具体工具/产品名" not in title_problems(
+        "讯飞星火开放了免费额度"
+    )
+
+
+def test_last_chance_relaxes_tool_name_but_not_roundup():
+    """最后一次机会：工具名可以放过（否则一整天没稿），日报腔仍然拦。"""
+    no_tool = "AI开始自己写周报以后团队少了两个会"
+    assert "没有具体工具/产品名" in title_problems(no_tool)
+    assert "没有具体工具/产品名" not in title_problems(no_tool, strict=False)
+
+    roundup = "AI 工具这周换了三件事"
+    assert title_problems(roundup, strict=False), "日报腔应该继续被拦"

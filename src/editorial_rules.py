@@ -44,6 +44,50 @@ ROUNDUP_RE = re.compile(
 
 # 常见具体产品名（命中即视为"有工具"）；不在表里的英文专名也认（正则兜底）
 KNOWN_TOOLS = {
+    "元宝",
+    "混元",
+    "盘古",
+    "星火",
+    "讯飞",
+    "商汤",
+    "日日新",
+    "海螺",
+    "Vidu",
+    "联想",
+    "阿里",
+    "腾讯",
+    "字节",
+    "百度",
+    "华为",
+    "小米",
+    "京东",
+    "美团",
+    "滴滴",
+    "月之暗面",
+    "MiniMax",
+    "百川",
+    "零一万物",
+    "阶跃",
+    "面壁",
+    "浪潮",
+    "新华三",
+    "英伟达",
+    "Nvidia",
+    "AMD",
+    "Intel",
+    "台积电",
+    "三星",
+    "寒武纪",
+    "地平线",
+    "摩尔线程",
+    "燧原",
+    "火山引擎",
+    "阿里云",
+    "腾讯云",
+    "华为云",
+    "智算",
+}
+KNOWN_TOOLS |= {
     "WorkBuddy",
     "豆包",
     "Cursor",
@@ -119,7 +163,7 @@ def _has_tool_name(title: str) -> bool:
     return bool(_LATIN_NAME_RE.search(title) or _SIZE_RE.search(title))
 
 
-def title_problems(title: str) -> List[str]:
+def title_problems(title: str, strict: bool = True) -> List[str]:
     """返回标题的问题列表；空列表 = 合格。
 
     硬条件只有两条（都能从 54 篇数据里指出来源）：
@@ -135,7 +179,9 @@ def title_problems(title: str) -> List[str]:
         return ["标题为空"]
     if not (TITLE_MIN <= len(t) <= TITLE_MAX):
         problems.append(f"长度 {len(t)} 字，要求 {TITLE_MIN}–{TITLE_MAX}")
-    if not _has_tool_name(t):
+    # strict=False 用于"最后一次机会"：没有具体工具名就放过（只记日志），
+    # 因为它的代价是一整天不发稿；日报腔照拦。
+    if strict and not _has_tool_name(t):
         problems.append("没有具体工具/产品名")
     hit = ROUNDUP_RE.search(t)
     if hit:
