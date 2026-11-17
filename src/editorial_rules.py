@@ -144,7 +144,11 @@ _LATIN_NAME_RE = re.compile(r"[A-Za-z][A-Za-z0-9\.\-]{2,}")
 # "1.7B 模型""70B 跑在本地" —— 带规模数字的也算具体对象，否则会误杀好标题
 _SIZE_RE = re.compile(r"\d+(?:\.\d+)?\s*[BbMmKk](?![A-Za-z])")
 
-TITLE_MIN, TITLE_MAX = 14, 30
+# 硬边界只拦极端值：数据上 14–30 字最稳，但把 31–35 字也判失败只会误杀
+# （2026-11-17 15:00「WorkBuddy 派 Word/Excel/PPT 活先答五个问题」35 字被判死）。
+# 落在 14–30 之外只提示，不拦。
+TITLE_SWEET_MIN, TITLE_SWEET_MAX = 14, 30
+TITLE_MIN, TITLE_MAX = 10, 40
 
 
 def has_tool_level_change(items) -> bool:
@@ -178,7 +182,7 @@ def title_problems(title: str, strict: bool = True) -> List[str]:
     if not t:
         return ["标题为空"]
     if not (TITLE_MIN <= len(t) <= TITLE_MAX):
-        problems.append(f"长度 {len(t)} 字，要求 {TITLE_MIN}–{TITLE_MAX}")
+        problems.append(f"长度 {len(t)} 字，超出 {TITLE_MIN}–{TITLE_MAX} 的硬边界")
     # strict=False 用于"最后一次机会"：没有具体工具名就放过（只记日志），
     # 因为它的代价是一整天不发稿；日报腔照拦。
     if strict and not _has_tool_name(t):

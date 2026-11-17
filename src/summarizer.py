@@ -347,6 +347,8 @@ class Summarizer:
         from src.editorial_rules import (
             TITLE_MAX,
             TITLE_MIN,
+            TITLE_SWEET_MAX,
+            TITLE_SWEET_MIN,
             candidate_tools,
             has_copyable_block,
             has_tool_level_change,
@@ -388,7 +390,7 @@ JSON 结构如下：
 8. 英文专有名词按本义翻译：mouse=小鼠（**不是鼠标**）、model=模型、agent=智能体；不确定的译名宁可用英文原名。
 9. 全文中文，总长约 2500～3500 字；段落可用 **加粗** 强调关键词。
 10. title 必须同时满足：含**具体工具/产品名**（Cursor / WorkBuddy / ChatGPT / 豆包…）、
-    不准是泛趋势/日报腔（这周 / 三款 / 盘点 / 趋势），长度 {TITLE_MIN}–{TITLE_MAX} 字。
+    不准是泛趋势/日报腔（这周 / 三款 / 盘点 / 趋势），长度 {TITLE_SWEET_MIN}–{TITLE_SWEET_MAX} 字最稳。
     反面例子：“AI工具这周换了三件事”“三款新模型把多模态推到哪一步”（没人有落点）。
 11. 至少一个**可复制块**：steps 块，或 ≥3 条的 bullets 清单。读者要能把某段直接抄走用
     —— 这是唯一能带来分享的东西（本号 54 篇里只有 5 篇有分享，其余全 0）。
@@ -558,7 +560,6 @@ JSON 结构如下：
         raise LLMUnavailableError(f"结构化内容生成失败: {last_error}")
 
     def _prepare_news_content(self, news_items: List[NewsItem]) -> str:
-        """准备新闻素材文本"""
         """准备新闻素材文本"""
         content_parts = []
 

@@ -33,7 +33,7 @@ def test_preset_chapters_exist_or_skip_on_other_machines():
         pytest.skip("本机没有装 workbuddy-guide 技能目录")
     missing = [
         rel for preset in gw.PRESETS for rel, _ in preset["chapters"]
-        if not (gw.SKILL_DIR / rel).exists()
+        if not gw.chapter_path("workbuddy", rel).exists()
     ]
     assert not missing, f"技能目录里缺这些章节: {missing}"
 
@@ -86,7 +86,7 @@ def test_doubao_presets_all_exist_on_disk():
     """豆包那套选题的章节路径也要真的存在（路径写错 = 当天出不了稿）。"""
     missing = [
         rel for preset in gw.DOUBAO_PRESETS for rel, _ in preset["chapters"]
-        if not (gw.references_dir("doubaowork") / rel).exists()
+        if not gw.chapter_path("doubaowork", rel).exists()
     ]
     assert not missing, f"豆包素材里缺这些章节: {missing}"
 

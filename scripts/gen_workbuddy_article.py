@@ -20,7 +20,12 @@ from src import editorial_template  # noqa: E402
 from src.ai_score import check_ai_score  # noqa: E402
 from src.fetcher import NewsItem  # noqa: E402
 from src.summarizer import Summarizer  # noqa: E402
-from src.materials import chapter_url, references_dir, source_label  # noqa: E402
+from src.materials import (  # noqa: E402
+    chapter_path,
+    chapter_url,
+    references_dir,
+    source_label,
+)
 
 for _s in (sys.stdout, sys.stderr):
     if hasattr(_s, "reconfigure"):
@@ -306,11 +311,10 @@ def _excerpt(text: str, limit: int = 500) -> str:
 
 
 def build_material(chapter_count: int, chapters=None, material: str = "workbuddy"):
-    base = references_dir(material)
     label_src = source_label(material)
     items = []
     for rel, label in (chapters or CHAPTERS)[:chapter_count]:
-        path = base / rel
+        path = chapter_path(material, rel)
         if not path.exists():
             print(f"跳过（不存在）: {path}")
             continue

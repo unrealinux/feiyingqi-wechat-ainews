@@ -16,28 +16,63 @@ from typing import Dict, Optional
 
 _HOME = Path.home()
 
+# 上游仓库会调整目录（2026-11-17 workbuddy-guide-skill 就把 references/chapters
+# 改成了 skills/<playbook>/workbuddy/*.md），所以每个素材源登记「候选目录」，
+# 按顺序找第一个真的有章节文件的，硬编码单个路径必然会在某天突然抓不到。
 MATERIALS: Dict[str, dict] = {
     "workbuddy": {
         "name": "WorkBuddy",
-        "references": _HOME
-        / "文档/workbuddy-guide-skill/skills/workbuddy-playbook/references",
+        "candidates": [
+            "文档/workbuddy-guide-skill/skills/*/workbuddy",
+            "文档/workbuddy-guide-skill/skills/*/references/chapters",
+            "文档/workbuddy-guide-skill/skills/*/references",
+        ],
         "source_label": "《WorkBuddy 实战蓝皮书》（社区整理，非官方文档）",
         "site": "https://workbuddy.homes",
     },
     "doubaowork": {
         "name": "豆包工作",
-        "references": _HOME
-        / "文档/doubaowork-guide-skill/skills/doubaowork-guide/references",
+        "candidates": [
+            "文档/doubaowork-guide-skill/skills/*/references/chapters",
+            "文档/doubaowork-guide-skill/skills/*/references",
+            "文档/workbuddy-guide-skill/skills/*/doubao",
+        ],
         "source_label": "《豆包工作实战指南》（社区整理，非官方文档）",
         "site": "https://doubaowork.homes",
     },
 }
 
 
+def _has_chapters(path: Path) -> bool:
+    return path.is_dir() and any(
+        p.suffix == ".md" and p.name.upper() != "INDEX.MD" for p in path.glob("*.md")
+    )
+
+
 def references_dir(key: str) -> Path:
-    """素材目录（章节在它下面的 chapters/）。"""
+    """素材目录：按候选 glob 找第一个真有章节 .md 的目录；都找不到返回第一个候选。"""
     if key not in MATERIALS:
         raise KeyError(f"未知素材源 {key!r}，可选：{sorted(MATERIALS)}")
+    first = None
+    for pattern in MATERIALS[key].get("candidates", []):
+        # 绝对路径直接当目录（测试和"素材放在外面"的场景）；相对路径按 _HOME 展开
+        candidate = Path(pattern).expanduser()
+        paths = [candidate] if candidate.is_absolute() else sorted(_HOME.glob(pattern))
+        for path in paths:
+            if first is None:
+                first = path
+            if _has_chapters(path):
+                return path
+    return first or (_HOME / "文档")
+
+
+def chapter_path(key: str, rel: str) -> Path:
+    """章节文件路径：上游可能把 chapters/ 这层去掉，两种布局都试一次。"""
+    base = references_dir(key)
+    direct = base / rel
+    if direct.exists():
+        return direct
+    return base / Path(rel).name
     return MATERIALS[key]["references"]
 
 
@@ -59,10 +94,9 @@ def chapter_url(text: str) -> Optional[str]:
 
 def load_chapters(key: str, rel_paths) -> list:
     """按顺序读章节，返回 [(标题, 正文)]；文件缺失直接跳过（不抛异常）。"""
-    base = references_dir(key)
     out = []
     for rel in rel_paths:
-        path = base / rel
+        path = chapter_path(key, rel)
         if not path.exists():
             continue
         text = path.read_text(encoding="utf-8")

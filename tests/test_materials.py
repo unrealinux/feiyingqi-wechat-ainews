@@ -30,7 +30,12 @@ def _register(tmp_path, monkeypatch, key="demo"):
     monkeypatch.setitem(
         m.MATERIALS,
         key,
-        {"name": "示例", "references": tmp_path, "source_label": "《示例》", "site": ""},
+        {
+            "name": "示例",
+            "candidates": [str(tmp_path)],
+            "source_label": "《示例》",
+            "site": "",
+        },
     )
     return key
 
@@ -71,4 +76,45 @@ def test_both_real_material_sources_are_on_disk():
         d = m.references_dir(key)
         if not d.exists():
             continue  # 换机器没这两套素材时跳过，不把测试当环境检查
-        assert list((d / "chapters").glob("*.md")), f"{key} 章节目录是空的"
+        md = [p for p in d.glob("*.md") if p.name.upper() != "INDEX.MD"]
+        assert md, f"{key} 解析到 {d}，但里面没有章节"
+
+
+def test_chapter_path_tolerates_layout_change(tmp_path, monkeypatch):
+    """上游去掉 chapters/ 这层后，旧 rel 路径仍要能读到（2026-11-17 事故）。"""
+    key = _register(tmp_path, monkeypatch)          # 目录里直接是 a.md / b.md
+    path = m.chapter_path(key, "chapters/a.md")
+    assert path.exists() and path.name == "a.md"
+
+
+def test_references_dir_searches_candidates(tmp_path, monkeypatch):
+    """候选表按顺序找到第一个真有章节的目录，别写死单个路径。"""
+    import pathlib
+
+    empty = tmp_path / "empty"
+    empty.mkdir()
+    good = tmp_path / "good"
+    good.mkdir()
+    (good / "part1-01.md").write_text("# 章节\n正文", encoding="utf-8")
+    monkeypatch.setitem(
+        m.MATERIALS,
+        "demo2",
+        {
+            "name": "示例",
+            "candidates": [str(empty), str(good)],
+            "source_label": "《示例》",
+            "site": "",
+        },
+    )
+    monkeypatch.setattr(m, "_HOME", tmp_path)
+    assert m.references_dir("demo2") == good
+
+
+def test_real_repos_resolve_to_a_dir_with_chapters():
+    """两个素材源在当前机器上都要解析到真有章节的目录。"""
+    for key in ("workbuddy", "doubaowork"):
+        d = m.references_dir(key)
+        if not d.exists():
+            continue
+        md = [p for p in d.glob("*.md") if p.name.upper() != "INDEX.MD"]
+        assert md, f"{key} 解析到 {d}，但里面没有章节"

@@ -49,12 +49,17 @@ class TestTitleRules:
             assert title_problems(title) == [], title
 
     def test_length_bounds(self):
+        """只拦极端值：14–30 是甜点区，31–35 字不该被判死（11-17 的误杀）。"""
         assert not any("长度" in p for p in title_problems("Cursor 更新后怎么接回本地工作流"))
         assert any("长度" in p for p in title_problems("Cursor 更新"))  # 太短
-        long_title = "Cursor 更新之后本地工作流要怎么一步步接回来并且保证历史会话不丢"
+        assert not any(
+            "长度" in p
+            for p in title_problems("WorkBuddy 派 Word/Excel/PPT 活先答五个问题")
+        ), "35 字属于合理范围，不该因为长度被拒"
+        long_title = "Cursor 更新之后本地工作流要怎么一步步接回来并且保证历史会话不丢还要能团队共享"
         assert len(long_title) > TITLE_MAX
         assert any("长度" in p for p in title_problems(long_title))
-        assert TITLE_MIN == 14 and TITLE_MAX == 30
+        assert (TITLE_MIN, TITLE_MAX) == (10, 40)
 
 
 class TestToolChangeGate:
