@@ -423,6 +423,18 @@ JSON 结构如下：
                     timeout=LLM_CALL_TIMEOUT,
                 )
                 raw = response.choices[0].message.content or ""
+                finish = getattr(response.choices[0], "finish_reason", None)
+                if finish == "length":
+                    # 被 max_tokens 截断：JSON 一定不完整，重试同一个长度只会再截一次
+                    logger.warning(
+                        f"模型输出被截断（finish_reason=length, {len(raw)} 字符），"
+                        "本次按'写太长'处理"
+                    )
+                    raise EditorialSpecError(
+                        f"上一稿被截断（{len(raw)} 字符就到底了）。这次压缩篇幅："
+                        "sections 减到 4 节、每节 2～3 个块、sources 最多 4 条，"
+                        "总字数压到 2200 字以内，先保证输出完整。"
+                    )
                 spec = extract_json(raw)
                 validate_spec(spec)
 
@@ -518,6 +530,7 @@ JSON 结构如下：
                         "或补一节 ≥3 条的 bullets 清单，让读者能直接抄走。"
                     )
                 if "JSON 解析失败" in str(e):
+                    logger.warning(f"JSON 解析失败，原始输出 {len(raw)} 字符")
                     ai_feedback = (
                         "\n\n上一稿不是合法 JSON（" + str(e) + "）。"
                         "只输出一个 JSON 对象本身：不要 Markdown 围栏、不要在前后加解释、"

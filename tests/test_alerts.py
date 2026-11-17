@@ -25,6 +25,10 @@ class TestFailureKind:
         assert failure_kind("获取 access_token 失败: invalid ip 1.2.3.4") == "wechat_ip"
         assert failure_kind("LLM 客户端不可用（未配置 API Key）") == "llm_unavailable"
         assert failure_kind("AI 味过重（56.0 >= 45.0）") == "ai_tone"
+        assert failure_kind(
+            "结构化内容生成失败: JSON 解析失败: Expecting ':' delimiter"
+        ) == "llm_bad_output"
+        assert failure_kind("结构化内容生成失败: 上一稿被截断（5900 字符就到底了）") == "llm_bad_output"
         assert failure_kind("发布步骤返回失败") == "run_failed"
 
 

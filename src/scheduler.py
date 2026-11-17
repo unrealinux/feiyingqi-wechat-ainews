@@ -56,6 +56,8 @@ def failure_kind(reason: str) -> str:
         return "gate_no_copyable"
     if "AI 味" in text:
         return "ai_tone"
+    if "JSON 解析失败" in text or "被截断" in text:
+        return "llm_bad_output"
     if "invalid ip" in text or "白名单" in text:
         return "wechat_ip"
     if "LLM" in text or "API Key" in text:
@@ -200,6 +202,15 @@ def run_once() -> bool:
                 f"今天已有 {already} 篇草稿（上限 {max_per_day}），跳过本次产出"
             )
             return True
+
+        # IP 白名单经常变（家用宽带），token 拿不到就没法建草稿：
+        # 先验一次，省掉一次注定白跑的 LLM 调用，也给出能对上号的告警分类。
+        from src.publisher import WeChatPublisher
+
+        if not WeChatPublisher().get_access_token():
+            raise RuntimeError(
+                "获取 access_token 失败（多半是出口 IP 不在白名单，见上文 invalid ip）"
+            )
 
         logger.info("\n[1/4] Fetching latest AI news...")
         news_items = fetch_news()

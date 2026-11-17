@@ -23,6 +23,7 @@ KIND_LABEL = {
     "gate_title": "闸门：标题不合格（重写后仍不合格）",
     "gate_no_copyable": "闸门：缺可复制块",
     "ai_tone": "AI 味门禁拦截",
+    "llm_bad_output": "LLM 输出坏了（JSON 语法错 / 被截断）",
     "wechat_ip": "微信 IP 白名单",
     "llm_unavailable": "LLM 不可用 / 未配置",
     "run_failed": "其它失败",
