@@ -220,7 +220,18 @@ def run_once() -> bool:
             # 照它写出来就是编造事实（AGENTS.md 红线）。宁可今天没稿。
             raise RuntimeError("没抓到任何新闻素材（所有新闻源都空），本次不生成")
 
-        logger.info(f"Fetched {len(news_items)} news items")
+        # 百度热搜是通用榜，会混进"养老金""伊朗"这类条目：先按 AI 相关词筛，
+        # 再限制送进模型的条数（噪声既稀释选题又烧 token）。
+        from src.relevance import select_relevant
+
+        max_for_llm = int(
+            get_scheduler_config(load_config()).get("max_material", 8) or 8
+        )
+        before = len(news_items)
+        news_items = select_relevant(news_items, limit=max_for_llm)
+        logger.info(
+            f"Fetched {before} news items → 相关素材 {len(news_items)} 条（上限 {max_for_llm}）"
+        )
 
         logger.info("\n[2/4] Generating structured content with AI...")
         # allow_mock=False：LLM 欠费/掉线时宁可本次失败，也不生成 mock 拼贴稿

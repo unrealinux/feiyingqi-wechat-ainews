@@ -45,7 +45,11 @@ def run_local_preview() -> bool:
         if not news_items:
             logger.error("没抓到任何新闻，终止")
             return False
-        logger.info(f"      抓到 {len(news_items)} 条")
+        from src.relevance import select_relevant
+
+        before = len(news_items)
+        news_items = select_relevant(news_items)
+        logger.info(f"      抓到 {before} 条 → 相关素材 {len(news_items)} 条")
 
         logger.info("[2/4] LLM 结构化产出…")
         spec = Summarizer().generate_editorial_spec(news_items, allow_mock=False)
