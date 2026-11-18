@@ -182,27 +182,48 @@ def test_rate_limit_is_retried_like_a_transport_error(summarizer, monkeypatch):
     assert summarizer.client.calls == 3
 
 
-def test_title_rejection_feeds_back_candidate_tool_names():
-    """标题被打回时，第二次 prompt 必须给出"能用哪些工具名"。
+def test_bad_title_is_fixed_by_repicking_titles_only():
+    """标题不合格只重拟标题（3 选 1），不整篇重写。
 
-    2026-11-16 08:00 定时任务两次都死在标题上（先"没有工具名"、再"没有动作词"），
-    因为第一次打回只说了"不合格"，没说能用什么。
+    2026-11-16/17 两天 4 次无稿都是"整篇重写换个标题"，既贵又不稳。
     """
     bad = _spec(HUMAN)
-    bad["title"] = "AI 工具这周换了三件事"          # 无工具名、无动作词
-    client = FakeClient([bad, bad])
+    bad["title"] = "AI 工具这周换了三件事"
+    client = FakeClient(
+        [
+            bad,
+            {"titles": [
+                "AI 工具这周又变了",           # 仍是日报腔，应跳过
+                "Cursor 更新后怎么接回本地工作流",  # 合格
+                "Cursor 这版到底改了什么",
+            ]},
+        ]
+    )
     summarizer = Summarizer()
     summarizer.client = client
-    items = [
-        NewsItem("Cursor 更新了服务器部署", "https://example.com/a", "s",
-                 "Cursor 把服务器搬进编辑器，v2 版本上线"),
-    ]
+
+    spec = summarizer.generate_editorial_spec(
+        [NewsItem("Cursor 更新了服务器部署", "https://example.com/a", "s", "v2 上线")],
+        allow_mock=False,
+    )
+
+    assert spec["title"] == "Cursor 更新后怎么接回本地工作流"
+    assert len(client.prompts) == 2, "应只多一次小请求，而不是重写整篇"
+    assert "候选" in client.prompts[1] or "3 个" in client.prompts[1]
+
+
+def test_all_title_candidates_bad_falls_back_to_lenient_rule():
+    """3 个候选都不合格时，按"最后一次机会"的标准放宽工具名，日报腔仍拒。"""
+    bad = _spec(HUMAN)
+    bad["title"] = "AI 工具这周换了三件事"
+    # 顺序：[整篇] → [重拟标题的 3 个候选] → [第 2 次整篇] → [候选]，都不合格
+    bad3 = {"titles": ["这周的三件事", "一周盘点", "三款模型对比"]}
+    client = FakeClient([bad, bad3, bad, bad3])
+    summarizer = Summarizer()
+    summarizer.client = client
 
     with pytest.raises(LLMUnavailableError) as err:
-        summarizer.generate_editorial_spec(items, allow_mock=False)
-
+        summarizer.generate_editorial_spec(
+            [NewsItem("t", "https://example.com/a", "s", "d")], allow_mock=False
+        )
     assert "标题不合格" in str(err.value)
-    assert "AI 工具这周换了三件事" in str(err.value), "错误里要带上被拒的标题"
-    second_prompt = client.prompts[1]
-    assert "Cursor" in second_prompt, "重写提示要给出素材里的具体工具名"
-    assert "泛趋势" in second_prompt, "重写提示要说明准不准写日报腔"

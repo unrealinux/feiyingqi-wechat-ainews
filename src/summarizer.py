@@ -456,14 +456,27 @@ JSON 结构如下：
                 # 最后一次机会放宽"必须有工具名"（仍拦日报腔）：
                 # 2026-11-17 08:00 两次被这条拦死（「算力翻5倍也白搭：量子位湿实验基准给 AI 选型划了条线」），
                 # 代价是一整天没有文章，收益却只是一个更具体的标题。
-                is_last_attempt = attempt >= max_attempts
-                problems = title_problems(
-                    spec.get("title", ""), strict=not is_last_attempt
-                )
+                # 标题不合格时只重拟标题：一次要 3 个候选、本地挑第一个过闸门的。
+                # 整篇重写（4000+ 字）只为改一行标题，既贵又容易顺手改坏正文。
+                problems = title_problems(spec.get("title", ""))
                 if problems:
-                    raise EditorialSpecError(
-                        f"标题不合格（{spec.get('title', '')}）：" + "；".join(problems)
-                    )
+                    better = self._repick_title(spec, news_items)
+                    if better:
+                        logger.info(
+                            f"标题被换掉：{spec.get('title', '')!r} → {better!r}"
+                        )
+                        spec["title"] = better
+                    else:
+                        # 候选里也没有合格的就按最后一次的标准放宽工具名（日报腔仍拦）
+                        remaining = title_problems(spec.get("title", ""), strict=False)
+                        if remaining:
+                            raise EditorialSpecError(
+                                f"标题不合格（{spec.get('title', '')}）："
+                                + "；".join(remaining)
+                            )
+                        logger.warning(
+                            f"标题只放宽到：{spec.get('title', '')!r}（{problems}）"
+                        )
                 if not has_copyable_block(spec):
                     raise EditorialSpecError(
                         "缺少可复制块：至少要一个 steps 块或 ≥3 条清单，读者才能照抄"
@@ -558,6 +571,60 @@ JSON 结构如下：
                 f"重写无用，需换一批素材。"
             )
         raise LLMUnavailableError(f"结构化内容生成失败: {last_error}")
+
+    def _repick_title(self, spec: dict, news_items: List[NewsItem]) -> str:
+        """让模型给 3 个候选标题，返回第一个过闸门的；都不合格返回空串。
+
+        只改标题、不动正文：比整篇重写便宜两个数量级，也不会把已通过的正文改坏。
+        """
+        from src.editorial_rules import (
+            TITLE_SWEET_MAX,
+            TITLE_SWEET_MIN,
+            title_problems,
+        )
+        from src.editorial_template import extract_json
+
+        if not self.client:
+            return ""
+        lead = " ".join(str(x) for x in (spec.get("lead") or [])[:2])[:400]
+        sections = "、".join(
+            str(sec.get("heading", "")) for sec in (spec.get("sections") or [])[:4]
+        )
+        prompt = (
+            "给下面这篇文章拟 3 个**能互相替换**的标题，只输出 JSON："
+            '{"titles": ["…", "…", "…"]}\n\n'
+            f"当前标题（不合格）：{spec.get('title', '')}\n"
+            f"副标题：{spec.get('subtitle', '')}\n"
+            f"开头：{lead}\n"
+            f"小标题：{sections}\n\n"
+            "硬要求：① 每个标题都要含一个具体工具/产品名（可用正文里出现的）；"
+            "② 不准日报腔（这周/三款/盘点/趋势/展望）；"
+            f"③ 长度 {TITLE_SWEET_MIN}–{TITLE_SWEET_MAX} 字最稳，硬上限 40 字；"
+            "④ 三个标题用不同角度，不要只换一个词。"
+        )
+        try:
+            resp = self.client.chat.completions.create(
+                model=self.model,
+                messages=[
+                    {"role": "system", "content": "你是中文科技媒体的标题编辑。"},
+                    {"role": "user", "content": prompt},
+                ],
+                temperature=0.9,
+                max_tokens=300,
+                timeout=LLM_CALL_TIMEOUT,
+            )
+            raw = resp.choices[0].message.content or ""
+            payload = extract_json(raw)
+            candidates = payload.get("titles") or payload.get("标题") or []
+        except Exception as e:
+            logger.warning(f"重拟标题失败（沿用原标题走放宽逻辑）: {e}")
+            return ""
+        for cand in candidates if isinstance(candidates, list) else []:
+            title = str(cand).strip()
+            if title and not title_problems(title):
+                return title
+        logger.warning(f"3 个候选标题都没过闸门: {candidates}")
+        return ""
 
     def _prepare_news_content(self, news_items: List[NewsItem]) -> str:
         """准备新闻素材文本"""
