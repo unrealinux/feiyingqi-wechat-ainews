@@ -225,3 +225,21 @@ def test_bullet_items_written_as_dicts_are_flattened():
     assert "· 字典条目" in html
     assert "· 字符串条目" in html
     assert "{'text'" not in html
+
+
+def test_draft_title_strips_literal_backslash_n():
+    """模型有时把断行写成字面 \\n（JSON 双转义），草稿标题不能带着它进微信。
+
+    2026-11-19 15:00 的草稿标题就是「WorkBuddy 接连接器与\\n远程入口的实操顺序」。
+    """
+    spec = _spec(title="WorkBuddy 接连接器与\\n远程入口的实操顺序")
+    title = et.draft_title(spec)
+    assert "\\n" not in title
+    assert title == "WorkBuddy 接连接器与 远程入口的实操顺序"
+
+
+def test_render_breaks_on_literal_backslash_n():
+    """正文里的大标题也要把字面 \\n 当断行，不是显示成反斜杠。"""
+    html = et.render(_spec(title="第一行\\n第二行"))
+    assert "第一行<br>第二行" in html
+    assert "\\n" not in html

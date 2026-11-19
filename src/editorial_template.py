@@ -295,9 +295,20 @@ def normalize_meta_date(spec: Dict[str, Any], date_text: Optional[str] = None) -
     spec["meta_line"] = f"{date_text} ｜ {rest}" if rest else date_text
 
 
+def normalize_title_breaks(title: str) -> str:
+    """把标题里的断行标记统一成真换行符。
+
+    模型按 prompt「可用 \n 手工断行」写 JSON 时，有时写 `\n`（json.loads 后是真
+    换行），有时写 `\\n`（转义成字面反斜杠+n）。后者原先漏网，2026-11-19 的
+    草稿标题就带着字面的「与\\n远程入口」进了微信。两种都认。
+    """
+    return str(title or "").replace("\\r\\n", "\n").replace("\\n", "\n")
+
+
 def draft_title(spec: Dict[str, Any]) -> str:
     """草稿标题：把手工断行合成一行（微信标题不支持换行），并压到 64 字以内。"""
-    title = re.sub(r"[ \t]*\n[ \t]*", " ", str(spec.get("title", "")))
+    title = normalize_title_breaks(spec.get("title", ""))
+    title = re.sub(r"[ \t]*\n[ \t]*", " ", title)
     return re.sub(r"\s{2,}", " ", title).strip()[:64]
 
 
@@ -309,7 +320,7 @@ def render(spec: Dict[str, Any]) -> str:
     meta_line = spec.get("meta_line", "")
     title_html = "<br>".join(
         html.escape(p, quote=False).strip()
-        for p in re.split(r"\n", str(spec["title"]))
+        for p in re.split(r"\n", normalize_title_breaks(spec["title"]))
         if p.strip()
     )
 
