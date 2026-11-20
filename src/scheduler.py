@@ -263,7 +263,9 @@ def run_once() -> bool:
         try:
             from src.ai_photo_cover import generate_ai_photo_cover
 
-            cover_result, _theme = generate_ai_photo_cover(title, cover_path)
+            cover_result, _theme = generate_ai_photo_cover(
+                title, cover_path, spec=spec, news_items=news_items
+            )
         except Exception as e:
             logger.warning(f"写实封面生成异常，改用渐变封面: {e}")
         if not cover_result:

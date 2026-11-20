@@ -14,7 +14,7 @@ import io
 import logging
 from datetime import datetime
 from pathlib import Path
-from typing import Optional, Tuple
+from typing import List, Optional, Tuple
 
 import requests
 
@@ -370,11 +370,15 @@ def generate_ai_photo_cover(
     date_text: Optional[str] = None,
     theme: Optional[str] = None,
     with_text: bool = False,
+    spec: Optional[dict] = None,
+    news_items: Optional[List] = None,
 ) -> Tuple[Optional[str], Optional[str]]:
     """生成写实风封面。
 
     Args:
         with_text: 默认 False —— 只出纯图，不叠加标题/署名/日期。
+        spec / news_items: 文章结构化内容与原始素材，用来让画面贴着正文走
+            （不再只靠标题选一个固定主题）。
 
     Returns:
         (图片路径, 主题名)；失败时返回 (None, None)，调用方应降级到渐变封面。
@@ -388,6 +392,27 @@ def generate_ai_photo_cover(
     theme = theme or pick_theme(title)
     prompt = _THEMES.get(theme, _THEMES["datacenter"])["prompt"]
     date_text = date_text or datetime.now().strftime("%Y年%m月%d日")
+
+    # 用文章真实内容补充 prompt：Agnes 出图只吃文字（image_url 被接口明确拒绝），
+    # 所以"贴着正文"只能在语义层做——把 spec/素材里的产品、场景、数字线索喂进去。
+    if spec or news_items:
+        from src.cover_context import cover_context, product_names, scene_hints
+
+        context = cover_context(spec, news_items)
+        products = product_names(spec, news_items)
+        hints = scene_hints(f"{title} {context}")
+        extra = []
+        if products:
+            extra.append("the concrete subject is about: " + ", ".join(products))
+        if hints:
+            extra.append("visual cues from the article: " + ", ".join(hints))
+        if context:
+            extra.append(
+                "article context (do not render any of this as text): " + context
+            )
+        if extra:
+            prompt += " " + " ".join(extra)
+            logger.info(f"[封面] 已注入文章线索（{len(extra)} 组）")
 
     logger.info(f"[封面] 主题={theme}，调用 Agnes 出图…")
     raw = _fetch_agnes_image(api_key, prompt, _image_endpoint(config))

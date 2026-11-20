@@ -66,7 +66,9 @@ def run_local_preview() -> bool:
 
         logger.info("[4/4] 生成封面（写实优先，失败降级渐变，均无文字）…")
         cover_path = f"output/preview_cv_{today}.jpg"
-        cover, theme = generate_ai_photo_cover(title, cover_path)
+        cover, theme = generate_ai_photo_cover(
+            title, cover_path, spec=spec, news_items=news_items
+        )
         if not cover:
             cover = generate_gradient_cover(title, cover_path, with_text=False)
         logger.info(f"      封面: {cover or '失败'}（主题 {theme or '-'}）")
