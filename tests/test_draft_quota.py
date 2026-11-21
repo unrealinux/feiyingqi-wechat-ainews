@@ -93,3 +93,25 @@ def _no_real_network(monkeypatch):
         raise AssertionError("测试里不该发真实请求")
 
     monkeypatch.setattr(requests, "post", _boom)
+
+
+def test_recent_titles_window_48h(monkeypatch):
+    """48 小时主题去重：窗口内的算，窗口外的不算（2026-11-21 Agnes 重写回归）。"""
+    now = datetime.datetime.now()
+    rows = [
+        (now - datetime.timedelta(hours=30), "Agnes 把 Agent 成本 砍到 1/27"),
+        (now - datetime.timedelta(hours=50), "两天前那篇"),
+        (now - datetime.timedelta(hours=2), "刚发的这篇"),
+    ]
+    with open(monitoring.DRAFT_LEDGER, "w", encoding="utf-8") as f:
+        for when, title in rows:
+            f.write(
+                '{"time": "%s", "title": "%s"}\n'
+                % (when.isoformat(timespec="seconds"), title)
+            )
+
+    titles = monitoring.recent_titles(48)
+
+    assert "Agnes 把 Agent 成本 砍到 1/27" in titles
+    assert "刚发的这篇" in titles
+    assert "两天前那篇" not in titles

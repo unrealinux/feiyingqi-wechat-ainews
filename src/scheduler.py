@@ -234,12 +234,29 @@ def run_once() -> bool:
         )
 
         logger.info("\n[2/4] Generating structured content with AI...")
+        # 近 48 小时已发主题：同一件事（同产品、同一变化、同一结论）两天内不写第二遍。
+        # 2026-11-21：Agnes 成本稿 11-20 17:49 刚发，次日素材里还是同一条。
+        from src.monitoring import recent_titles
+
+        recent = recent_titles(48)
+        dedup_hint = ""
+        if recent:
+            dedup_hint = (
+                "近 48 小时本号已发过这些主题，禁止重写同一件事"
+                "（同产品、同一变化、同一结论）：\n"
+                + "\n".join(f"- {t}" for t in recent)
+                + "\n若本次素材与上面重合，换用其他条目或换角度写新信息，不要复制旧结论。"
+            )
+            logger.info(f"近 48 小时已发 {len(recent)} 篇 → 作为去重提示传给模型")
         # allow_mock=False：LLM 欠费/掉线时宁可本次失败，也不生成 mock 拼贴稿
         summarizer = Summarizer()
         for material_attempt in (1, 2):
             try:
                 spec = summarizer.generate_editorial_spec(
-                    news_items, allow_mock=False, require_tool_change=True
+                    news_items,
+                    allow_mock=False,
+                    require_tool_change=True,
+                    extra_instruction=dedup_hint,
                 )
                 break
             except ThinMaterialError as e:

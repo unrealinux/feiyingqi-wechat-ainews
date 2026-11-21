@@ -9,6 +9,7 @@ from src.editorial_rules import (
     TITLE_MIN,
     has_copyable_block,
     has_tool_level_change,
+    has_writable_material,
     title_problems,
 )
 from src.fetcher import NewsItem
@@ -79,6 +80,38 @@ class TestToolChangeGate:
 
     def test_empty_material_does_not_pass(self):
         assert not has_tool_level_change([])
+
+
+class TestWritableMaterialGate:
+    """2026-11-21 放宽：有具体对象 + 数字就能写，纯泛趋势照拒。
+
+    回归对象是 08:00 连挂两天的现场素材（11-20、11-21）。
+    """
+
+    def test_real_news_with_object_and_number_passes(self):
+        items = [
+            NewsItem(
+                "黎曼猜想被证明？！Claude加持，34岁数学家放出Lean证明",
+                "https://a",
+                description="Lean 4 形式化，社区在核对",
+            )
+        ]
+        assert has_writable_material(items)
+
+    def test_tool_level_change_still_the_fast_path(self):
+        items = [NewsItem("某模型免费额度翻倍", "https://a", description="")]
+        assert has_writable_material(items)
+
+    def test_pure_trend_material_is_rejected(self):
+        items = [
+            NewsItem("AI工具这周换了三件事", "https://a", description="三款模型各有取舍"),
+            NewsItem("从刷分打到补缝", "https://b", description="机器人新竞赛升温"),
+            NewsItem("行业观察", "https://c", description="大家都在讨论智能体"),
+        ]
+        assert not has_writable_material(items)
+
+    def test_empty_material_does_not_pass(self):
+        assert not has_writable_material([])
 
 
 class TestCopyableBlock:

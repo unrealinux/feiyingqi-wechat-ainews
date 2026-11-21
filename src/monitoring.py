@@ -7,7 +7,7 @@ Monitoring & Alerts - 监控告警模块
 import json
 import logging
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Dict, Optional, List
 from abc import ABC, abstractmethod
 from pathlib import Path
@@ -110,6 +110,23 @@ def count_local_drafts_today() -> int:
     return sum(
         1 for r in _read_jsonl(DRAFT_LEDGER) if str(r.get("time", "")).startswith(today)
     )
+
+
+def recent_titles(hours: int = 48) -> List[str]:
+    """台账里近 N 小时建过的草稿标题（48 小时主题去重用）。
+
+    微信草稿箱发出去就查不到了，所以以本地台账为准；时间戳坏掉的行跳过。
+    """
+    cutoff = datetime.now() - timedelta(hours=hours)
+    titles = []
+    for record in _read_jsonl(DRAFT_LEDGER):
+        try:
+            when = datetime.fromisoformat(str(record.get("time", "")))
+        except ValueError:
+            continue
+        if when >= cutoff and record.get("title"):
+            titles.append(str(record["title"]))
+    return titles
 
 
 def _read_jsonl(path: Path) -> List[Dict]:

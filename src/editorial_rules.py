@@ -160,6 +160,35 @@ def has_tool_level_change(items) -> bool:
     return False
 
 
+_NUMBER_RE = re.compile(r"\d")
+
+
+def _has_concrete_object(text: str) -> bool:
+    """素材里有没有能落到读者手上的具体对象（产品名 / 英文专名 / 带规模的模型）。"""
+    return bool(
+        any(name in text for name in KNOWN_TOOLS)
+        or _LATIN_NAME_RE.search(text)
+        or _SIZE_RE.search(text)
+    )
+
+
+def has_writable_material(items) -> bool:
+    """素材是否可写：有工具级变化，或者有「具体对象 + 具体事实」。
+
+    2026-11-21 放宽。原闸门只认版本/定价/额度词，把「黎曼猜想被 Claude 证明」
+    「清华团队造国产 Token 工厂」这类有对象、有数字的真新闻整批判死，08:00 连挂两天
+    （2026-11-20、11-21）。现在只要有对象（产品/英文专名/规模）加一个数字就能写；
+    纯泛趋势（没对象或没数字）照旧拒——那批标题的阅读是 0–6。
+    """
+    if has_tool_level_change(items):
+        return True
+    for item in items or []:
+        text = f"{getattr(item, 'title', '')} {getattr(item, 'description', '')}"
+        if _has_concrete_object(text) and _NUMBER_RE.search(text):
+            return True
+    return False
+
+
 def _has_tool_name(title: str) -> bool:
     if any(name in title for name in KNOWN_TOOLS):
         return True

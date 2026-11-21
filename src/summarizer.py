@@ -351,15 +351,16 @@ class Summarizer:
             TITLE_SWEET_MIN,
             candidate_tools,
             has_copyable_block,
-            has_tool_level_change,
+            has_writable_material,
             title_problems,
         )
 
-        if require_tool_change and not has_tool_level_change(news_items):
+        if require_tool_change and not has_writable_material(news_items):
             # 2026-11-16 回采：泛趋势选题（"三款模型…""这周换了三件事"）阅读 0–6，
-            # 而"具体工具 + 具体变化"能做到 70–108。素材没有硬落点就不写。
+            # 而"具体对象 + 具体事实"能做到 70–108。素材没落点就不写。
+            # 2026-11-21：闸门放宽到"有对象加数字也算"，不再死报版本/定价词。
             raise ThinMaterialError(
-                "素材里没有工具级变化（版本/定价/额度/权限/用法），本次不写趋势稿"
+                "素材里既没有工具级变化，也没有具体对象+具体事实，本次不写趋势稿"
             )
 
         news_content = self._prepare_news_content(news_items)
